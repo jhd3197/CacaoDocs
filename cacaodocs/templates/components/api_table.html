@@ -1,0 +1,108 @@
+<div class="overflow-x-auto">
+  <table class="min-w-full bg-white">
+    <thead>
+      <tr class="border-b">
+        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: {{ PRIMARY_COLOR }};">
+          Endpoint
+        </th>
+        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider" style="color: {{ PRIMARY_COLOR }};">
+          Method
+        </th>
+        <th class="px-6 py-3 text-left text-xs font-medium" style="color: {{ PRIMARY_COLOR }};">
+          Status
+        </th>
+        <th class="px-6 py-3 text-left text-xs font-medium" style="color: {{ PRIMARY_COLOR }};">
+          Version
+        </th>
+        <th class="px-6 py-3 text-left text-xs font-medium" style="color: {{ PRIMARY_COLOR }};">
+          Last Updated
+        </th>
+        <th class="px-6 py-3 text-left text-xs font-medium" style="color: {{ PRIMARY_COLOR }};">
+          Description
+        </th>
+      </tr>
+    </thead>
+    <tbody class="divide-y">
+      {% for item in items %}
+      <tr id="{{ 'types-' ~ item.function_name.lower() }}"
+          class="hover:bg-gray-50"
+          data-method="{{ item.method | lower }}"
+          data-status="{{ item.status | lower }}"
+          data-tag="{{ item.tag | lower }}"
+          data-version="{{ item.version | lower }}">
+        <td class="px-6 py-4 text-sm" style="color: {{ PRIMARY_COLOR }};">
+          <a href="#{{ item.type }}-{{ item.function_name|lower }}" 
+             style="color: {{ PRIMARY_COLOR }};"
+             class="hover:underline">
+            {{ item.endpoint }}
+          </a>
+        </td>
+        <td class="px-6 py-4">
+          <span class="px-2 py-1 text-xs rounded"
+                style="background-color: {{ PRIMARY_COLOR }}20; color: {{ PRIMARY_COLOR }};">
+            {{ item.method.upper() }}
+          </span>
+        </td>
+        <td class="px-6 py-4 text-sm text-gray-600">
+          {{ item.status.title() }}
+        </td>
+        <td class="px-6 py-4 text-sm text-gray-600">
+          {{ item.version }}
+        </td>
+        <td class="px-6 py-4 text-sm text-gray-600">
+          {{ item.last_updated }}
+        </td>
+        <td class="px-6 py-4 text-sm text-gray-600">
+          {% if item.type and item.type != 'api' %}
+            {% set types = item.type.split('[') %}
+            {% for t in types %}
+                {% set clean_type = t.replace(']', '').strip() %}
+                
+                {% set type_exists = false %}
+                {% set type_id = '' %}
+                {% if registry and registry.types %}
+                    {% for type_def in registry.types %}
+                        {% if type_def.function_name == clean_type %}
+                            {% set type_exists = true %}
+                            {% set type_id = 'types-' ~ type_def.function_name|lower %}
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+                
+                {% if clean_type.lower() == 'str' %}
+                    <span class="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">str</span>
+                {% elif clean_type.lower() == 'int' %}
+                    <span class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">int</span>
+                {% elif clean_type.lower() == 'list' %}
+                    <span class="px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700">List</span>
+                {% elif clean_type.lower() == 'datetime' %}
+                    <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">datetime</span>
+                    <span class="px-2 py-0.5 text-xs rounded-full">📅</span>
+                {% else %}
+                    {% if type_exists %}
+                        <a href="?page=types#{{ type_id }}" 
+                           class="px-2 py-0.5 text-xs rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200 cursor-pointer transition-all duration-200 inline-flex items-center space-x-1 group hover:-translate-y-0.5">
+                            <span>{{ clean_type }}</span>
+                            <span class="opacity-0 group-hover:opacity-100 transition-opacity">🔗</span>
+                        </a>
+                    {% else %}
+                        <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">{{ clean_type }}</span>
+                    {% endif %}
+                {% endif %}
+                
+                {% if loop.index == 1 and types|length > 1 %}
+                    <span class="text-gray-500">[</span>
+                {% endif %}
+            {% endfor %}
+            {% if types|length > 1 %}
+                <span class="text-gray-500">]</span>
+            {% endif %}
+        {% else %}
+            {{ item.type }}
+        {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

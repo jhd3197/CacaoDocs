@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>{{ TITLE }}</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Optional: Your own CSS -->
+    <link rel="stylesheet" href="../assets/main.css" />
+
+    <style>
+      .view-switch {
+        position: relative;
+        color: #6B7280;
+      }
+      .view-switch.active {
+        background-color: #EEF2FF;
+        color: {{ PRIMARY_COLOR }};
+        font-weight: 500;
+      }
+      .view-switch:first-child {
+        border-right: 1px solid #E5E7EB;
+      }
+
+      /* Tooltip Styling */
+      .type-tooltip {
+        z-index: 50;
+      }
+      .type-tooltip-content {
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+      }
+      /* Tooltip hover functionality */
+      .hover-target {
+        display: none;
+        pointer-events: none;
+      }
+      .hover-trigger:hover + .hover-target,
+      .hover-trigger:hover ~ .hover-target,
+      .hover-target:hover {
+        display: block;
+      }
+      .hover-target {
+        z-index: 1000;
+      }
+      .peer:hover {
+        opacity: 1;
+      }
+      .peer-hover\:block {
+        display: none;
+      }
+      .peer:hover + .peer-hover\:block,
+      .peer:hover ~ .peer-hover\:block,
+      .peer-hover\:block:hover {
+        display: block;
+      }
+
+      /* Main Sidebar (white) */
+      .main-sidebar {
+        width: 250px;
+        background-color: #ffffff; /* White */
+        min-height: 100vh;
+        position: fixed;
+        left: 0;
+        top: 0;
+        border-right: 1px solid #e5e7eb;
+      }
+
+      /* Secondary Sidebar (dark) */
+      .secondary-sidebar {
+        width: 280px;
+        background-color: #1f2937; /* Dark */
+        color: #ffffff;           /* White text */
+        min-height: 100vh;
+        position: fixed;
+        left: 250px;
+        top: 0;
+      }
+
+      /* Main Content - with dynamic width and max-width */
+      .main-content {
+        transition: margin-left 0.3s ease;
+        width: 100%;
+        margin-right: auto;
+        padding: 2rem;
+        min-height: 100vh;
+      }
+      
+      .main-content.with-secondary {
+        margin-left: calc(530px); /* sidebar width + 5% margin */
+      }
+      
+      .main-content.without-secondary {
+        margin-left: calc(250px); /* sidebar width + 5% margin */
+      }
+
+      /* Responsive Adjustments */
+      @media (max-width: 1280px) {
+        .main-sidebar {
+          width: 200px;
+        }
+        .secondary-sidebar {
+          width: 200px;
+          left: 200px;
+        }
+        .main-content.with-secondary {
+          margin-left: calc(400px + 5%); /* sidebar width + 5% margin */
+        }
+        .main-content.without-secondary {
+          margin-left: calc(200px + 5%); /* sidebar width + 5% margin */
+        }
+      }
+
+      /* Clickable type badges */
+      .type-badge {
+        transition: all 0.2s ease;
+      }
+      .type-badge:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      }
+      .type-badge.clickable {
+        cursor: pointer;
+      }
+    </style>
+
+    <script>
+      // Function to get URL parameters
+      function getUrlParam(param) {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get(param);
+      }
+
+      // Function to set URL parameter
+      function setUrlParam(param, value) {
+        const url = new URL(window.location.href);
+        url.searchParams.set(param, value);
+        window.history.pushState({}, '', url);
+      }
+
+      function switchType(docType) {
+        console.log('Switching to:', docType);
+
+        // Hide all content sections
+        document.querySelectorAll('[data-content]').forEach(el => {
+          el.classList.add('hidden');
+        });
+        // Hide all sidebars
+        document.querySelectorAll('[data-sidebar]').forEach(el => {
+          el.classList.add('hidden');
+        });
+
+        // Update URL parameter without reloading
+        setUrlParam('page', docType);
+
+        // Handle secondary sidebar visibility
+        const sidebarWrapper = document.querySelector('[data-sidebar-wrapper]');
+        const mainContent = document.querySelector('.main-content');
+        if (docType === 'home') {
+          // If on home, hide the secondary sidebar and adjust main content
+          if (sidebarWrapper) sidebarWrapper.classList.add('hidden');
+          mainContent.classList.remove('with-secondary');
+          mainContent.classList.add('without-secondary');
+          // Show home content
+          document.querySelector('[data-content="home"]').classList.remove('hidden');
+          // Hide API filter controls
+          document.getElementById('apiFilterControls').classList.add('hidden');
+        } else {
+          // Show the secondary sidebar and adjust main content
+          if (sidebarWrapper) sidebarWrapper.classList.remove('hidden');
+          mainContent.classList.add('with-secondary');
+          mainContent.classList.remove('without-secondary');
+
+          // Reveal the relevant content and sidebar
+          const contentEl = document.querySelector(`[data-content="${docType}"]`);
+          const sidebarEl = document.querySelector(`[data-sidebar="${docType}"]`);
+
+          if (contentEl) {
+            contentEl.classList.remove('hidden');
+            // If switching to API, show the card view and filter controls
+            if (docType === 'api') {
+              document.getElementById('apiFilterControls').classList.remove('hidden');
+              document.getElementById('apiCardView').classList.remove('hidden');
+              document.getElementById('apiTableView').classList.add('hidden');
+            } else {
+              // Hide API Filter Controls on non-API pages
+              document.getElementById('apiFilterControls').classList.add('hidden');
+            }
+          }
+          if (sidebarEl) sidebarEl.classList.remove('hidden');
+        }
+
+        // Update active link style in the main sidebar
+        document.querySelectorAll('[data-nav-item]').forEach(el => {
+          // Reset link styling
+          el.classList.remove('bg-gray-200');
+          el.style.color = '#4B5563'; // text-gray-700
+        });
+        const activeNav = document.querySelector(`[data-nav-item="${docType}"]`);
+        if (activeNav) {
+          activeNav.classList.add('bg-gray-200');
+          activeNav.style.color = '{{ PRIMARY_COLOR }}';
+        }
+
+        // Reset filters if we switch to API
+        if (docType === 'api') {
+          if (document.getElementById('apiSearch')) {
+            document.getElementById('apiSearch').value = '';
+          }
+          if (document.getElementById('methodFilter')) {
+            document.getElementById('methodFilter').value = 'all';
+          }
+          if (document.getElementById('statusFilter')) {
+            document.getElementById('statusFilter').value = 'all';
+          }
+          if (document.getElementById('tagFilter')) {
+            document.getElementById('tagFilter').value = 'all';
+          }
+          if (document.getElementById('versionFilter')) {
+            document.getElementById('versionFilter').value = 'all';
+          }
+        }
+
+        // Handle hash scrolling after switching
+        const hash = window.location.hash;
+        if (hash && docType === 'types') {
+          const targetEl = document.querySelector(hash);
+          if (targetEl) {
+            targetEl.scrollIntoView({ behavior: 'smooth' });
+          }
+        }
+      }
+
+      function filterAPIContent(docType) {
+        if (docType !== 'api') return;
+
+        const searchTerm = document.getElementById('apiSearch').value.toLowerCase();
+        const selectedMethod = document.getElementById('methodFilter').value;
+        const selectedStatus = document.getElementById('statusFilter').value.toLowerCase();
+        const selectedTag = document.getElementById('tagFilter').value.toLowerCase();
+        const selectedVersion = document.getElementById('versionFilter').value.toLowerCase();
+
+        // Filter card items
+        document.querySelectorAll('[data-api-item]').forEach(item => {
+          const method = item.getAttribute('data-method').toLowerCase();
+          const status = item.getAttribute('data-status').toLowerCase();
+          const tag = item.getAttribute('data-tag').toLowerCase();
+          const version = item.getAttribute('data-version').toLowerCase();
+          const endpoint = item.getAttribute('data-endpoint').toLowerCase();
+          const description = item.querySelector('.api-description')?.textContent.toLowerCase() || '';
+
+          const matchesSearch =
+            searchTerm === '' ||
+            endpoint.includes(searchTerm) ||
+            description.includes(searchTerm);
+          const matchesMethod = selectedMethod === 'all' || method === selectedMethod;
+          const matchesStatus = selectedStatus === 'all' || status === selectedStatus;
+          const matchesTag = selectedTag === 'all' || tag === selectedTag;
+          const matchesVersion = selectedVersion === 'all' || version === selectedVersion;
+
+          item.classList.toggle(
+            'hidden',
+            !(matchesSearch && matchesMethod && matchesStatus && matchesTag && matchesVersion)
+          );
+        });
+
+        // Filter table rows
+        document.querySelectorAll('#apiTableView tbody tr').forEach(row => {
+          const method = row.getAttribute('data-method').toLowerCase();
+          const status = row.getAttribute('data-status').toLowerCase();
+          const tag = row.getAttribute('data-tag').toLowerCase();
+          const version = row.getAttribute('data-version').toLowerCase();
+          const endpoint = row.cells[0].textContent.toLowerCase();
+          const description = row.cells[5].textContent.toLowerCase();
+
+          const matchesSearch =
+            searchTerm === '' ||
+            endpoint.includes(searchTerm) ||
+            description.includes(searchTerm);
+          const matchesMethod = selectedMethod === 'all' || method === selectedMethod;
+          const matchesStatus = selectedStatus === 'all' || status === selectedStatus;
+          const matchesTag = selectedTag === 'all' || tag === selectedTag;
+          const matchesVersion = selectedVersion === 'all' || version === selectedVersion;
+
+          row.classList.toggle(
+            'hidden',
+            !(matchesSearch && matchesMethod && matchesStatus && matchesTag && matchesVersion)
+          );
+        });
+      }
+
+      // Switch between card and table views
+      function switchView(viewType) {
+        const cardView = document.getElementById('apiCardView');
+        const tableView = document.getElementById('apiTableView');
+        const viewSwitcherButtons = document.querySelectorAll('.view-switch');
+
+        if (viewType === 'cards') {
+          cardView.classList.remove('hidden');
+          tableView.classList.add('hidden');
+        } else {
+          cardView.classList.add('hidden');
+          tableView.classList.remove('hidden');
+        }
+
+        viewSwitcherButtons.forEach(button => {
+          button.classList.toggle('active', button.getAttribute('data-view') === viewType);
+        });
+      }
+
+      // Initialize the page based on URL param and hash
+      function initializePage() {
+        const page = getUrlParam('page');
+        const hash = window.location.hash;
+        console.log('Initializing with page:', page, 'and hash:', hash);
+        if (page && ['api', 'types', 'docs'].includes(page)) {
+          switchType(page);
+          if (hash && page === 'types') {
+            const targetEl = document.querySelector(hash);
+            if (targetEl) {
+              targetEl.scrollIntoView({ behavior: 'smooth' });
+            }
+          }
+        } else {
+          document.querySelector('.main-content').classList.add('without-secondary');
+          switchType('home');
+        }
+      }
+
+      // Handle browser back/forward
+      window.addEventListener('popstate', initializePage);
+
+      // On window load
+      window.addEventListener('load', initializePage);
+    </script>
+  </head>
+
+  <body class="bg-gray-50">
+    <!-- Main Layout (no header) -->
+    <div class="flex">
+      <!-- Main Sidebar (white) -->
+      <aside class="main-sidebar">
+        <!-- Optional Logo at the top -->
+        <div class="p-4 border-b border-gray-200 flex items-center justify-center">
+          <img
+            src="{{ logo_url }}"
+            alt="Logo"
+            class="h-auto"
+            onerror="this.style.display='none'"
+          />
+        </div>
+
+        <!-- Navigation Links -->
+        <nav class="p-4 space-y-2">
+          <!-- Home -->
+          <a
+            href="?page=home"
+            data-nav-item="home"
+            class="block px-4 py-2 rounded flex items-center text-gray-700 hover:bg-gray-200"
+          >
+            <!-- Example Home icon -->
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M3 9l9-7 9 7v11a2 2 0 
+                   01-2 2h-4a2 2 0 
+                   01-2-2v-4H9v4a2 2 0 
+                   01-2 2H3z"
+              />
+            </svg>
+            Home
+          </a>
+
+          <!-- API -->
+          <a
+            href="?page=api"
+            data-nav-item="api"
+            class="block px-4 py-2 rounded flex items-center text-gray-700 hover:bg-gray-200"
+          >
+            <!-- Example API icon (database icon) -->
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path 
+                stroke-linecap="round" 
+                stroke-linejoin="round" 
+                d="M12 6c4.418 0 8-1.79 8-4s-3.582-4-8-4S4 
+                   1.79 4 4s3.582 4 8 4zm0 0v6m0 0c4.418 0 8 
+                   -1.79 8 -4m-8 4c-4.418 0 -8 1.79 -8 4s3.582 
+                   4 8 4 8 -1.79 8 -4-3.582 -4-8 -4z" 
+              />
+            </svg>
+            API
+          </a>
+
+          <!-- Types -->
+          <a
+            href="?page=types"
+            data-nav-item="types"
+            class="block px-4 py-2 rounded flex items-center text-gray-700 hover:bg-gray-200"
+          >
+            <!-- Example icon (folder icon) -->
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5 mr-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              stroke-width="2"
+            >
+              <path 
+                stroke-linecap="round" 
+                stroke-linejoin="round" 
+                d="M3 7a2 2 0 012-2h3.586a1 
+                   1 0 00.707-.293l1.414-1.414A1 
+                   1 0 0112 3h5a2 2 0 012 
+                   2v2M3 7h18M3 7v12a2 2 0 
+                   002 2h14a2 2 0 002-2V7M3 
+                   13h18" 
+              />
+            </svg>
+            Types
+          </a>
+        </nav>
+      </aside>
+
+      <!-- Secondary Sidebar (dark, hidden for home) -->
+      <aside data-sidebar-wrapper class="secondary-sidebar hidden">
+        <div class="p-4">
+          <div class="mb-4">
+            <input
+              type="text"
+              placeholder="Search..."
+              class="w-full px-4 py-2 rounded-lg border border-gray-600 
+                     bg-gray-800 text-white placeholder-gray-400"
+              style="outline-color: {{ PRIMARY_COLOR }};"
+            />
+          </div>
+          <!-- This is where you can place sub-links / filters for the selected page -->
+          {{ SIDEBAR }}
+        </div>
+      </aside>
+
+      <!-- Main Content -->
+      <main class="main-content">
+        <!-- API Filter Controls -->
+        <div id="apiFilterControls" class="hidden mb-6">
+          <div class="flex gap-4 items-center bg-white p-4 rounded-lg shadow-md">
+            <!-- View Switcher -->
+            <div class="flex rounded-lg border border-gray-300 overflow-hidden">
+              <button
+                onclick="switchView('cards')"
+                class="view-switch px-3 py-2 active"
+                data-view="cards"
+              >
+                Cards
+              </button>
+              <button
+                onclick="switchView('table')"
+                class="view-switch px-3 py-2"
+                data-view="table"
+              >
+                Table
+              </button>
+            </div>
+
+            <input
+              type="text"
+              id="apiSearch"
+              placeholder="Search endpoints or descriptions..."
+              class="flex-1 px-4 py-2 rounded-lg border border-gray-300"
+              style="outline-color: {{ PRIMARY_COLOR }};"
+              oninput="filterAPIContent('api')"
+            />
+
+            <select
+              id="methodFilter"
+              class="px-4 py-2 rounded-lg border border-gray-300"
+              style="outline-color: {{ PRIMARY_COLOR }};"
+              onchange="filterAPIContent('api')"
+            >
+              <option value="all">All Methods</option>
+              <option value="get">GET</option>
+              <option value="post">POST</option>
+              <option value="put">PUT</option>
+              <option value="delete">DELETE</option>
+            </select>
+
+            <select
+              id="statusFilter"
+              class="px-4 py-2 rounded-lg border border-gray-300"
+              style="outline-color: {{ PRIMARY_COLOR }};"
+              onchange="filterAPIContent('api')"
+            >
+              {{ STATUS_OPTIONS }}
+            </select>
+
+            <select
+              id="tagFilter"
+              class="px-4 py-2 rounded-lg border border-gray-300"
+              style="outline-color: {{ PRIMARY_COLOR }};"
+              onchange="filterAPIContent('api')"
+            >
+              {{ TAG_OPTIONS }}
+            </select>
+
+            <select
+              id="versionFilter"
+              class="px-4 py-2 rounded-lg border border-gray-300"
+              style="outline-color: {{ PRIMARY_COLOR }};"
+              onchange="filterAPIContent('api')"
+            >
+              {{ VERSION_OPTIONS }}
+            </select>
+          </div>
+        </div>
+
+        <!-- Content Sections -->
+        <div data-content="home" class="space-y-6">
+          {{ HOME_CONTENT }}
+        </div>
+
+        <div data-content="api" class="hidden space-y-6">
+          <div id="apiCardView" class="hidden">
+            {{ API_CARD_CONTENT }}
+          </div>
+          <div id="apiTableView" class="hidden">
+            {{ API_TABLE_CONTENT }}
+          </div>
+          <div class="mt-4">
+            <h3
+              class="font-semibold mb-2"
+              style="color: {{ PRIMARY_COLOR }};"
+            >
+              JSON Body
+            </h3>
+            <pre class="bg-gray-100 p-2 rounded whitespace-pre-wrap break-all">
+{{ json_body | tojson(indent=4) }}
+            </pre>
+          </div>
+          <div class="space-y-4">
+                {% if description %}
+                <div class="api-description bg-gray-50 p-4 rounded-lg">
+                    <h3 class="font-semibold mb-2" style="color: {{ PRIMARY_COLOR }};">Description</h3>
+                    <p class="text-gray-600">{{ description }}</p>
+                </div>
+                {% endif %}
+                
+                {% if args %}
+                <div class="api-arguments bg-gray-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-2">Arguments</h3>
+                    <!-- Include arguments without passing the type in the name -->
+                    {% for arg_name, details in args.items() %}
+                        <div class="flex items-start space-x-3 p-2 hover:bg-gray-100 rounded transition-colors">
+                            <div class="min-w-[140px] flex items-center space-x-2">
+                                <span class="font-medium text-gray-900">{{ arg_name }}</span>
+                                
+                                {# Type badges #}
+                                {% if details.type %}
+                                    {% set types = details.type.split('[') %}
+                                    {% for t in types %}
+                                        {% set clean_type = t.replace(']', '').strip() %}
+                                        {% if clean_type.lower() == 'str' %}
+                                            <span class="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-700">str</span>
+                                        {% elif clean_type.lower() == 'int' %}
+                                            <span class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">int</span>
+                                        {% elif clean_type.lower() == 'list' %}
+                                            <span class="px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700">List</span>
+                                        {% elif clean_type.lower() == 'datetime' %}
+                                            <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">datetime</span>
+                                            <span class="px-2 py-0.5 text-xs rounded-full">📅</span>
+                                        {% else %}
+                                            <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">{{ clean_type }}</span>
+                                        {% endif %}
+                                    {% endfor %}
+                                {% endif %}
+                                
+                                {# Special field badges #}
+                                {% if 'id' in arg_name.lower() or 'identifier' in details.description.lower() %}
+                                    <span class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">🔑</span>
+                                {% endif %}
+                                {% if 'email' in arg_name.lower() or 'mail' in details.description.lower() %}
+                                    <span class="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700">@</span>
+                                {% endif %}
+                                {% if 'password' in arg_name.lower() %}
+                                    <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">***</span>
+                                {% endif %}
+                                {% if 'url' in arg_name.lower() or 'link' in details.description.lower() %}
+                                    <span class="px-2 py-0.5 text-xs rounded-full bg-indigo-100 text-indigo-700">🔗</span>
+                                {% endif %}
+                            </div>
+                            <div class="flex-1">
+                                <div class="text-sm text-gray-600">{{ details.description }}</div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                
+                {% if json_body %}
+                <div class="api-json-body bg-gray-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-2">JSON Body</h3>
+                    <pre>{{ json_body | tojson(indent=2) }}</pre>
+                </div>
+                {% endif %}
+                
+                {% if returns %}
+                <div class="api-returns bg-gray-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-2">Returns</h3>
+                    <p>{{ returns.description }}</p>
+                </div>
+                {% endif %}
+                
+                {% if raises %}
+                <div class="api-raises bg-gray-50 p-4 rounded-lg">
+                    <h3 class="text-lg font-semibold mb-2">Raises</h3>
+                    <p>{{ raises }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Additional content sections -->
+        {{ CONTENT_SECTIONS }}
+      </main>
+    </div>
+  </body>
+</html>

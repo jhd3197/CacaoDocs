@@ -1,0 +1,26 @@
+# CacaoDocs Configuration
+
+# Documentation settings
+title: "System Documentation"
+description: "API and Type documentation for the system"
+version: "1.0.0"
+
+# Theme configuration
+theme:
+  primary_color: "#543A14"
+
+# Logo configuration
+logo_url: "cacaodocs/templates/assets/img/logo.png"
+
+# Type mappings (how types are displayed in the UI)
+type_mappings:
+  api: "API"
+  types: "Types"
+  docs: "Docs"
+
+# Tag mappings (how tags are displayed in the UI)
+tag_mappings:
+  users: "Users"
+  models: "Models"
+  auth: "Authentication"
+  general: "General"

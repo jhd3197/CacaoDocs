@@ -1,0 +1,23 @@
+<div class="type-tooltip hidden absolute z-50 w-80 bg-white rounded-lg shadow-lg border border-gray-200 p-4 group-hover:block">
+    <div class="type-tooltip-content">
+        <div class="flex justify-between items-start mb-2">
+            <h4 class="font-bold" style="color: {{ PRIMARY_COLOR }};">{{ type_name }}</h4>
+            <span class="text-xs px-2 py-1 rounded-full bg-gray-100">Type</span>
+        </div>
+        {% if description %}
+        <p class="text-sm text-gray-600 mb-2">{{ description }}</p>
+        {% endif %}
+        {% if properties %}
+        <div class="mt-2">
+            <h5 class="text-sm font-semibold mb-1">Properties:</h5>
+            <div class="bg-gray-50 rounded p-2">
+                {% for prop_name, prop_details in properties.items() %}
+                <div class="text-xs mb-1">
+                    <span class="font-medium">{{ prop_name }}</span>: {{ prop_details }}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>

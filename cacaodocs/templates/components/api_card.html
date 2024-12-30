@@ -1,0 +1,207 @@
+<div id="{{ anchor_id }}" 
+     class="bg-white rounded-lg shadow-md p-6 mb-6 group" 
+     data-api-item 
+     data-method="{{ method }}" 
+     data-status="{{ status }}" 
+     data-tag="{{ tag }}" 
+     data-version="{{ version }}" 
+     data-endpoint="{{ endpoint }}">
+    
+    <!-- Header with primary color text -->
+    <h2 class="text-2xl font-bold mb-4 flex items-center space-x-2">
+        {% if is_api_type %}
+            <span style="color: {{ PRIMARY_COLOR }};">{{ endpoint }}</span>
+            <span class="text-sm px-3 py-1 rounded-full" style="background-color: {{ PRIMARY_COLOR }}20; color: {{ PRIMARY_COLOR }};">{{ method | upper }}</span>
+            <span class="text-sm px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full">{{ version | upper }}</span>
+        {% else %}
+            <span style="color: {{ PRIMARY_COLOR }};">{{ function_name }}</span>
+        {% endif %}
+        <span class="text-sm px-3 py-1 rounded-full" style="background-color: {{ PRIMARY_COLOR }}20; color: {{ PRIMARY_COLOR }};">{{ tag }}</span>
+    </h2>
+    
+    <div class="space-y-4">
+        {% if description %}
+        <div class="api-description bg-gray-50 p-4 rounded-lg">
+            <h3 class="font-semibold mb-2" style="color: {{ PRIMARY_COLOR }};">Description</h3>
+            <p class="text-gray-600">{{ description }}</p>
+        </div>
+        {% endif %}
+
+        {% if not is_api_type and has_metadata %}
+        <div class="bg-gray-50 p-4 rounded-lg">
+            <h3 class="font-semibold mb-2">Metadata</h3>
+            <dl class="grid grid-cols-2 gap-2">
+                {% for label, value in metadata %}
+                    {% if value %}
+                    <dt class="font-medium">{{ label }}:</dt>
+                    <dd>{{ value }}</dd>
+                    {% endif %} 
+                {% endfor %}
+            </dl>
+        </div>
+        {% endif %}
+
+        {% if args %}
+        <div class="mt-4 bg-gray-50 p-4 rounded-lg">
+            <h4 class="font-bold text-gray-700 mb-4">Arguments</h4>
+            <div class="grid gap-3">
+                {% if args is mapping %}
+                    {% for arg_name, details in args.items() %}
+                    <div class="flex items-start space-x-3 p-2 hover:bg-gray-100 rounded transition-colors">
+                        <div class="min-w-[140px] flex items-center space-x-2">
+                            <span class="font-medium text-gray-900">{{ arg_name }}</span>
+                            
+                            {# Type badges with improved type linking #}
+                            {% if details.type %}
+                                {% set parts = details.type.split('[') %}
+                                {% for t in parts %}
+                                    {% set clean_type = t.replace(']', '').strip() %}
+                                    {% set type_def = none %}
+                                    
+                                    {# Find matching type definition #}
+                                    {% for def in type_definitions %}
+                                        {% if clean_type.lower() in def.contains %}
+                                            {% set type_def = def %}
+                                        {% endif %}
+                                    {% endfor %}
+
+                                    {# Check if type exists in registry for linking #}
+                                    {% set type_exists = false %}
+                                    {% set type_id = '' %}
+                                    {% if registry and registry.types %}
+                                        {% for type_def in registry.types %}
+                                            {% if type_def.function_name == clean_type %}
+                                                {% set type_exists = true %}
+                                                {% set type_id = 'types-' ~ type_def.function_name|lower %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
+                                    
+                                    {# Display badge based on type #}
+                                    {% if type_def %}
+                                        <span class="px-2 py-0.5 text-xs rounded-full flex items-center space-x-1"
+                              style="background-color: {{ type_def.bg_color }}; color: {{ type_def.color }}">
+                                            {% if type_def.emoji %}
+                                                <span class="mr-1">{{ type_def.emoji }}</span>
+                                            {% endif %}
+                                            <span>{{ clean_type }}</span>
+                                        </span>
+                                    {% elif type_exists %}
+                                        <a href="?page=types#{{ type_id }}"
+                                           onclick="event.preventDefault(); switchType('types'); setTimeout(() => document.querySelector('#{{ type_id }}')?.scrollIntoView({behavior: 'smooth'}), 100)"
+                                           class="px-2 py-0.5 text-xs rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-200 cursor-pointer transition-all duration-200 inline-flex items-center space-x-1 group hover:-translate-y-0.5">
+                                            <span>{{ clean_type }}</span>
+                                            <span class="opacity-0 group-hover:opacity-100 transition-opacity">🔗</span>
+                                        </a>
+                                    {% else %}
+                                        <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">
+                                            {{ clean_type }}
+                                        </span>
+                                    {% endif %}
+                                    
+                                    {# Add brackets for List types #}
+                                    {% if loop.index == 1 and parts|length > 1 %}
+                                        <span class="text-gray-500 mx-1">[</span>
+                                    {% endif %}
+                                {% endfor %}
+                                {% if parts|length > 1 %}
+                                    <span class="text-gray-500">]</span>
+                                {% endif %}
+                            {% endif %}
+                            
+                            {# Special field badges #}
+                            {% if 'id' in arg_name.lower() or 'identifier' in details.description.lower() %}
+                                <span class="px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-700">🔑</span>
+                            {% endif %}
+                            {% if 'email' in arg_name.lower() or 'mail' in details.description.lower() %}
+                                <span class="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-700">@</span>
+                            {% endif %}
+                            {% if 'password' in arg_name.lower() %}
+                                <span class="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-700">***</span>
+                            {% endif %}
+                            {% if 'url' in arg_name.lower() or 'link' in details.description.lower() %}
+                                <span class="px-2 py-0.5 text-xs rounded-full bg-indigo-100 text-indigo-700">🔗</span>
+                            {% endif %}
+                        </div>
+                        <div class="flex-1">
+                            <div class="text-sm text-gray-600">{{ details.description }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-sm text-gray-600">{{ args }}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        {% if json_body %}
+        <div class="mt-4">
+            <h3 class="font-semibold mb-2" style="color: {{ PRIMARY_COLOR }};">JSON Body</h3>
+            <pre class="bg-gray-100 p-2 rounded whitespace-pre-wrap break-all">{{ json_body | tojson(indent=4) }}</pre>
+        </div>
+        {% endif %}
+
+        {% if returns %}
+        <div class="mt-4">
+            <h3 class="font-semibold mb-2" style="color: {{ PRIMARY_COLOR }};">Returns</h3>
+            {% if returns.is_type_ref %}
+            <div class="text-gray-600 relative inline-block">
+                <a href="?page=types#type-{{ returns.type_name|lower }}" 
+                   class="inline-flex items-center peer">
+                    <span class="text-sm px-2 py-1 rounded-full mr-2" 
+                          style="background-color: {{ PRIMARY_COLOR }}20; color: {{ PRIMARY_COLOR }};">
+                        Type{% if returns.is_list %}[]{% endif %}
+                    </span>
+                    {{ returns.full_type }}
+                </a>
+                <!-- Enhanced Type Info Tooltip -->
+                <div class="absolute hidden peer-hover:block hover:block left-0 top-full mt-1 w-96 p-4 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                    <div class="flex justify-between items-start mb-2">
+                        <h4 class="font-bold" style="color: {{ PRIMARY_COLOR }};">
+                            {{ returns.full_type }}
+                        </h4>
+                        <span class="text-xs px-2 py-1 rounded-full bg-gray-100">
+                            Type{% if returns.is_list %} Array{% endif %}
+                        </span>
+                    </div>
+                    {% if returns.description %}
+                    <p class="text-sm text-gray-600 mb-2">{{ returns.description }}</p>
+                    {% endif %}
+                    
+                    <!-- Show Type Properties -->
+                    {% if registry and registry.types %}
+                        {% for type_def in registry.types %}
+                            {% if type_def.function_name == returns.type_name %}
+                                {% if type_def.args %}
+                                <div class="mt-2">
+                                    <h5 class="text-sm font-semibold mb-1">Properties:</h5>
+                                    <div class="bg-gray-50 rounded p-2">
+                                        {% for prop_name, prop_desc in type_def.args.items() %}
+                                        <div class="text-xs mb-1 flex">
+                                            <span class="font-medium min-w-[150px]">{{ prop_name }}</span>
+                                            <span class="text-gray-600">{{ prop_desc }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <p class="text-gray-600">{{ returns.content }}</p>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if raises %}
+        <div class="mt-4">
+            <h3 class="font-semibold mb-2" style="color: {{ PRIMARY_COLOR }};">Raises</h3>
+            <p class="text-gray-600">{{ raises }}</p>
+        </div>
+        {% endif %}
+    </div>
+</div>

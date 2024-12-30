@@ -1,0 +1,17 @@
+
+<!-- Example Type Definition Section -->
+{% for type_def in registry.types %}
+<div id="types-{{ type_def.function_name|lower }}" class="type-definition">
+    <h3 class="text-xl font-bold">{{ type_def.function_name }}</h3>
+    <p>{{ type_def.description }}</p>
+    {% if type_def.args %}
+    <ul>
+        {% for arg_name, arg_details in type_def.args.items() %}
+        <li>
+            <strong>{{ arg_name }}</strong> ({{ arg_details.type }}): {{ arg_details.description }}
+        </li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+</div>
+{% endfor %}
