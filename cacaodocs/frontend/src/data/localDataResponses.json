@@ -1,0 +1,412 @@
+{
+    "api": [
+        {
+            "description": "Creates a new user with the provided details.",
+            "endpoint": "/api/users",
+            "function_name": "create_user",
+            "json_body": "{\n            \"username\": \"johndoe\",\n            \"email\": \"john@example.com\",\n            \"first_name\": \"John\",\n            \"last_name\": \"Doe\",\n            \"addresses\": [\n                {\n                    \"street\": \"123 Main St\",\n                    \"city\": {\n                        \"name\": \"Boston\",\n                        \"state\": \"Massachusetts\",\n                        \"country_code\": \"US\",\n                        \"latitude\": 42.3601,\n                        \"longitude\": -71.0589\n                    },\n                    \"country\": {\n                        \"code\": \"US\",\n                        \"name\": \"United States\",\n                        \"phone_code\": \"+1\"\n                    },\n                    \"postal_code\": \"02101\"\n                }\n            ]\n        }",
+            "last_updated": "2024-04-25",
+            "method": "POST",
+            "returns": {
+                "description": "The created user record with full address details.",
+                "full_type": "User",
+                "is_list": false,
+                "is_type_ref": true,
+                "type_name": "User"
+            },
+            "status": "Production",
+            "tag": "users",
+            "type": "api",
+            "version": "v1",
+            "responses": [
+                {
+                    "code": "201",
+                    "description": "User created successfully."
+                },
+                {
+                    "code": "400",
+                    "description": "Invalid input data."
+                }
+            ]
+        },
+        {
+            "args": {
+                "user_id": {
+                    "bg_color": "#E0F2FE",
+                    "color": "#0EA5E9",
+                    "description": "The unique identifier of the user.",
+                    "emoji": "🔑",
+                    "type": "int"
+                }
+            },
+            "description": "Retrieves the details of a user given their unique ID.",
+            "endpoint": "/api/users/<user_id>",
+            "function_name": "get_user",
+            "last_updated": "2024-04-25",
+            "method": "GET",
+            "raises": "UserNotFoundError: If no user is found with the given `user_id`.",
+            "returns": {
+                "description": "The complete user record with all associated data.",
+                "full_type": "User",
+                "is_list": false,
+                "is_type_ref": true,
+                "type_name": "User"
+            },
+            "status": "Production",
+            "tag": "users",
+            "type": "api",
+            "version": "v1",
+            "responses": [
+                {
+                    "code": "200",
+                    "description": "User retrieved successfully."
+                },
+                {
+                    "code": "404",
+                    "description": "User not found."
+                }
+            ]
+        },
+        {
+            "args": {
+                "user_id": {
+                    "bg_color": "#E0F2FE",
+                    "color": "#0EA5E9",
+                    "description": "The unique identifier of the user.",
+                    "emoji": "🔑",
+                    "type": "int"
+                }
+            },
+            "description": "Updates the email address of an existing user.",
+            "endpoint": "/api/users/<user_id>/email",
+            "function_name": "update_user_email",
+            "json_body": "{\n            \"email\": \"newemail@example.com\"\n        }",
+            "last_updated": "2024-04-25",
+            "method": "PATCH",
+            "raises": "UserNotFoundError: If no user is found with the given `user_id`.",
+            "returns": {
+                "description": "The updated user record.",
+                "full_type": "User",
+                "is_list": false,
+                "is_type_ref": true,
+                "type_name": "User"
+            },
+            "status": "In Review",
+            "tag": "users",
+            "type": "api",
+            "version": "v1",
+            "responses": [
+                {
+                    "code": "200",
+                    "description": "User email updated successfully."
+                },
+                {
+                    "code": "400",
+                    "description": "Invalid email format."
+                },
+                {
+                    "code": "404",
+                    "description": "User not found."
+                }
+            ]
+        },
+        {
+            "args": {
+                "user_id": {
+                    "bg_color": "#E0F2FE",
+                    "color": "#0EA5E9",
+                    "description": "The unique identifier of the user.",
+                    "emoji": "🔑",
+                    "type": "int"
+                }
+            },
+            "description": "Deletes an existing user from the system.",
+            "endpoint": "/api/users/<user_id>",
+            "function_name": "delete_user",
+            "last_updated": "2024-04-25",
+            "method": "DELETE",
+            "raises": "UserNotFoundError: If no user is found with the given `user_id`.",
+            "returns": {
+                "description": "A message confirming deletion.",
+                "full_type": "dict",
+                "is_list": false,
+                "is_type_ref": true,
+                "type_name": "dict"
+            },
+            "status": "In Review",
+            "tag": "users",
+            "type": "api",
+            "version": "v1"
+        },
+        {
+            "description": "Retrieves a list of all users in the system.",
+            "endpoint": "/api/users",
+            "function_name": "list_users",
+            "last_updated": "2024-04-25",
+            "method": "GET",
+            "returns": {
+                "description": "A list of user records.",
+                "full_type": "list[User]",
+                "is_list": true,
+                "is_type_ref": true,
+                "type_name": "User"
+            },
+            "status": "Production",
+            "tag": "users",
+            "type": "api",
+            "version": "v1"
+        }
+    ],
+    "docs": [
+        {
+            "args": {},
+            "description": "Adds two numbers together.",
+            "function_name": "add",
+            "method": "add",
+            "returns": {
+                "description": "The sum of a and b",
+                "full_type": "float",
+                "is_list": false,
+                "is_type_ref": true,
+                "type_name": "float"
+            },
+            "status": "Production",
+            "tag": "calculator",
+            "type": "docs",
+            "version": "v1"
+        },
+        {
+            "args": {},
+            "description": "Subtracts second number from first number.",
+            "function_name": "subtract",
+            "method": "subtract",
+            "returns": {
+                "description": "The difference between a and b",
+                "full_type": "float",
+                "is_list": false,
+                "is_type_ref": true,
+                "type_name": "float"
+            },
+            "status": "Production",
+            "tag": "calculator",
+            "type": "docs",
+            "version": "v1"
+        }
+    ],
+    "types": [
+        {
+            "args": {
+                "code": {
+                    "bg_color": "#DCFCE7",
+                    "color": "#22C55E",
+                    "description": "The ISO country code (e.g., 'US', 'UK')",
+                    "emoji": "📝",
+                    "type": "str"
+                },
+                "created_at": {
+                    "bg_color": "#F1F5F9",
+                    "color": "#64748B",
+                    "description": "Timestamp when the record was created",
+                    "emoji": "📅",
+                    "type": "datetime"
+                },
+                "id": {
+                    "bg_color": "#E0F2FE",
+                    "color": "#0EA5E9",
+                    "description": "Unique identifier for the country",
+                    "emoji": "🔑",
+                    "type": "str"
+                },
+                "name": {
+                    "bg_color": "#DCFCE7",
+                    "color": "#22C55E",
+                    "description": "The full country name",
+                    "emoji": "📝",
+                    "type": "str"
+                },
+                "phone_code": {
+                    "bg_color": "#DCFCE7",
+                    "color": "#22C55E",
+                    "description": "International dialing code",
+                    "emoji": "📝",
+                    "type": "str"
+                },
+                "updated_at": {
+                    "bg_color": "#F1F5F9",
+                    "color": "#64748B",
+                    "description": "Timestamp when the record was last updated",
+                    "emoji": "📅",
+                    "type": "datetime"
+                }
+            },
+            "description": "Represents a country in the system.",
+            "function_name": "Country",
+            "tag": "locations",
+            "type": "types"
+        },
+        {
+            "args": {
+                "country_code": {
+                    "bg_color": "#DCFCE7",
+                    "color": "#22C55E",
+                    "description": "The ISO country code",
+                    "emoji": "📝",
+                    "type": "str"
+                },
+                "created_at": {
+                    "bg_color": "#F1F5F9",
+                    "color": "#64748B",
+                    "description": "Timestamp when the record was created",
+                    "emoji": "📅",
+                    "type": "datetime"
+                },
+                "id": {
+                    "bg_color": "#E0F2FE",
+                    "color": "#0EA5E9",
+                    "description": "Unique identifier for the city",
+                    "emoji": "🔑",
+                    "type": "str"
+                },
+                "latitude": {
+                    "bg_color": "#E0E7FF",
+                    "color": "#6366F1",
+                    "description": "Geographic latitude",
+                    "emoji": "🔢",
+                    "type": "float"
+                },
+                "longitude": {
+                    "bg_color": "#E0E7FF",
+                    "color": "#6366F1",
+                    "description": "Geographic longitude",
+                    "emoji": "🔢",
+                    "type": "float"
+                },
+                "name": {
+                    "bg_color": "#DCFCE7",
+                    "color": "#22C55E",
+                    "description": "The city name",
+                    "emoji": "📝",
+                    "type": "str"
+                },
+                "state": {
+                    "bg_color": "#DCFCE7",
+                    "color": "#22C55E",
+                    "description": "State or province name",
+                    "emoji": "📝",
+                    "type": "str"
+                },
+                "updated_at": {
+                    "bg_color": "#F1F5F9",
+                    "color": "#64748B",
+                    "description": "Timestamp when the record was last updated",
+                    "emoji": "📅",
+                    "type": "datetime"
+                }
+            },
+            "description": "Represents a city within a country.",
+            "function_name": "City",
+            "tag": "locations",
+            "type": "types"
+        },
+        {
+            "args": {
+                "city": {
+                    "bg_color": "#F3F4F6",
+                    "color": "#6B7280",
+                    "description": "City information",
+                    "emoji": "📎",
+                    "type": "City"
+                },
+                "country": {
+                    "bg_color": "#DBEAFE",
+                    "color": "#3B82F6",
+                    "description": "Country information",
+                    "emoji": "🔢",
+                    "type": "Country"
+                },
+                "postal_code": {
+                    "bg_color": "#DCFCE7",
+                    "color": "#22C55E",
+                    "description": "Postal or ZIP code",
+                    "emoji": "📝",
+                    "type": "str"
+                },
+                "street": {
+                    "bg_color": "#DCFCE7",
+                    "color": "#22C55E",
+                    "description": "Street name and number",
+                    "emoji": "📝",
+                    "type": "str"
+                }
+            },
+            "description": "Represents a user's address in the system.",
+            "function_name": "Address",
+            "tag": "locations",
+            "type": "types"
+        },
+        {
+            "args": {
+                "addresses": {
+                    "bg_color": "#F3F4F6",
+                    "color": "#6B7280",
+                    "description": "List of user's addresses",
+                    "emoji": "📎",
+                    "type": "List[Address]"
+                },
+                "created_at": {
+                    "bg_color": "#F1F5F9",
+                    "color": "#64748B",
+                    "description": "Account creation timestamp",
+                    "emoji": "📅",
+                    "type": "datetime"
+                },
+                "email": {
+                    "bg_color": "#FEE2E2",
+                    "color": "#EF4444",
+                    "description": "The user's email address",
+                    "emoji": "📧",
+                    "type": "str"
+                },
+                "first_name": {
+                    "bg_color": "#DCFCE7",
+                    "color": "#22C55E",
+                    "description": "User's first name",
+                    "emoji": "📝",
+                    "type": "str"
+                },
+                "id": {
+                    "bg_color": "#E0F2FE",
+                    "color": "#0EA5E9",
+                    "description": "The unique identifier",
+                    "emoji": "🔑",
+                    "type": "int"
+                },
+                "last_name": {
+                    "bg_color": "#DCFCE7",
+                    "color": "#22C55E",
+                    "description": "User's last name",
+                    "emoji": "📝",
+                    "type": "str"
+                },
+                "updated_at": {
+                    "bg_color": "#F1F5F9",
+                    "color": "#64748B",
+                    "description": "Last update timestamp",
+                    "emoji": "📅",
+                    "type": "datetime"
+                },
+                "username": {
+                    "bg_color": "#DCFCE7",
+                    "color": "#22C55E",
+                    "description": "The user's username",
+                    "emoji": "📝",
+                    "type": "str"
+                }
+            },
+            "description": "Represents a user in the system with extended information.",
+            "function_name": "User",
+            "tag": "models",
+            "type": "types"
+        }
+    ]
+}

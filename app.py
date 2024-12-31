@@ -1,12 +1,17 @@
 # app.py
-import json
-from flask import Flask, request, jsonify
-from flask.json import JSONEncoder
+
 from cacaodocs import CacaoDocs
-from models.user import User, Address
+
+CacaoDocs.load_config()
+
+
+from flask import Flask, request, jsonify, render_template
+from flask.json import JSONEncoder
 from models.database import MockDatabase
-from models.locations import City, Country
-from typing import Union
+
+
+import pkg_test
+
 
 class CustomJSONEncoder(JSONEncoder):
     """Custom JSON encoder for Flask."""
@@ -16,7 +21,6 @@ class CustomJSONEncoder(JSONEncoder):
         return super().default(obj)
 
 # Load configuration from file
-CacaoDocs.load_config()
 
 app = Flask(__name__)
 app.json_encoder = CustomJSONEncoder
@@ -202,7 +206,9 @@ def get_documentation():
         @type{dict}: The documentation registry.
     """
     documentation = CacaoDocs.get_json()
-    return jsonify(documentation), 200
+    response = jsonify(documentation)
+    response.headers.add('Access-Control-Allow-Origin', '*')  # Enable CORS
+    return response, 200
 
 @app.route('/docs/html', methods=['GET'])
 def get_documentation_html():
@@ -224,6 +230,11 @@ def get_documentation_html():
     """
     html_documentation = CacaoDocs.get_html()
     return html_documentation, 200, {'Content-Type': 'text/html'}
+
+@app.route('/home')
+def home():
+    # Render the navbar.html template
+    return render_template('navbar.html')
 
 if __name__ == '__main__':
     app.run(debug=True)

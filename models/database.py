@@ -13,31 +13,43 @@ class MockDatabase:
         # Sample location data
         self._sample_locations = {
             'US': Country(
+                id='1',
                 code='US',
                 name='United States',
-                phone_code='+1'
+                phone_code='+1',
+                created_at=datetime.now(),
+                updated_at=datetime.now()
             ),
             'UK': Country(
+                id='2',
                 code='UK',
                 name='United Kingdom',
-                phone_code='+44'
+                phone_code='+44',
+                created_at=datetime.now(),
+                updated_at=datetime.now()
             )
         }
         
         self._sample_cities = {
             'Boston': City(
+                id='1',
                 name='Boston',
                 state='Massachusetts',
                 country_code='US',
                 latitude=42.3601,
-                longitude=-71.0589
+                longitude=-71.0589,
+                created_at=datetime.now(),
+                updated_at=datetime.now()
             ),
             'London': City(
+                id='2',
                 name='London',
                 state='England',
                 country_code='UK',
                 latitude=51.5074,
-                longitude=-0.1278
+                longitude=-0.1278,
+                created_at=datetime.now(),
+                updated_at=datetime.now()
             )
         }
         

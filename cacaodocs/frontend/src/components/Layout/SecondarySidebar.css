@@ -1,0 +1,76 @@
+:root {
+  --primary-color: #2A2420; /* dark brown */
+  --primary-color-light: #3D332D; /* lighter brown */
+  --primary-color-dark: #241F1B; /* darker brown */
+  --text-color: #E6D5C9; /* light beige */
+  --text-color-dark: #D4BFB3; /* darker light beige */
+  --accent-color: #10B981; /* green (for GET method) */
+  --method-colors: {
+    GET: var(--accent-color),
+    POST: var(--primary-color-dark),
+    PUT: var(--primary-color-dark),
+    DELETE: #EF4444, /* red */
+    PATCH: #8B5CF6 /* purple */
+  };
+}
+
+.custom-dark-menu,
+.custom-dark-menu.ant-menu-dark,
+.custom-dark-menu.ant-menu-dark .ant-menu {
+  color: var(--text-color) !important;
+  background: var(--primary-color) !important;
+}
+
+.custom-dark-menu.ant-menu-dark .ant-menu-item:hover {
+  background-color: var(--primary-color-light) !important;
+}
+
+.custom-dark-menu .ant-menu-item-selected {
+  background-color: var(--primary-color-light) !important;
+}
+
+.custom-dark-menu .ant-menu-submenu-title:hover {
+  background-color: var(--primary-color-light) !important;
+}
+
+.custom-dark-menu .ant-menu-submenu-active > .ant-menu-submenu-title:hover {
+  color: var(--text-color-dark) !important;
+}
+
+.custom-dark-menu .ant-menu-item:active,
+.custom-dark-menu .ant-menu-submenu-title:active {
+  background: var(--primary-color-light) !important;
+}
+
+.custom-dark-menu .ant-menu-item {
+  color: var(--text-color) !important;
+  transition: all 0.3s ease;
+}
+
+.custom-dark-menu .ant-menu-item:hover {
+  color: var(--text-color-dark) !important;
+}
+
+.custom-dark-menu .ant-menu-submenu-title {
+  font-weight: 600 !important;
+}
+
+/* Group Title styles (applied to API, Types, and Docs) */
+.group-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.group-title.apiOutlined {
+  color: var(--text-color) !important;
+}
+
+.search-input input::placeholder {
+    color: #BFA094 !important;
+}

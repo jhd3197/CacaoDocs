@@ -1,0 +1,49 @@
+{
+  "name": "cacaodocs-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "homepage": ".",
+  "dependencies": {
+    "@craco/craco": "^7.1.0",
+    "antd": "^5.0.0",
+    "core-js": "^3.23.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^5.2.0",
+    "react-scripts": "^5.0.1",
+    "@ant-design/icons": "^5.0.0",
+    "react-syntax-highlighter": "^15.5.0"
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/react-router-dom": "^5.3.3",
+    "cross-env": "^7.0.3",
+    "@types/react-syntax-highlighter": "^15.5.11"
+  },
+  "scripts": {
+    "start": "cross-env PORT=3005 NODE_OPTIONS=--openssl-legacy-provider craco start",
+    "build": "cross-env NODE_OPTIONS=--openssl-legacy-provider craco build && xcopy /y src\\data\\localData.json build\\",
+    "test": "craco test",
+    "eject": "react-scripts eject"
+  },
+  "eslintConfig": {
+    "extends": [
+      "react-app",
+      "react-app/jest"
+    ]
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

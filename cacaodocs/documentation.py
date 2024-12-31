@@ -3,12 +3,14 @@
 import re
 import json
 import yaml
+import inspect  # <-- Import inspect to get function source and signature
 from pathlib import Path
 from typing import Dict, List, Optional
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import os
 import markdown  # Add import for markdown processing
-import base64  # Add this import at the top
+import base64  # Add this import
+from .type_definitions import TYPE_DEFINITIONS
 
 class CacaoDocs:
     """A class to handle documentation processes for Python code."""
@@ -31,93 +33,8 @@ class CacaoDocs:
         "logo_url": "cacaodocs/templates/assets/img/logo.png"  # Add default logo path
     }
 
-    # Type definitions for badges
-    _type_definitions = [
-        {
-            "type": "str",
-            "emoji": "📝",
-            "color": "#22C55E",  # green
-            "bg_color": "#DCFCE7",
-            "contains": ["str", "string"]
-        },
-        {
-            "type": "int",
-            "emoji": "🔢",
-            "color": "#3B82F6",  # blue
-            "bg_color": "#DBEAFE",
-            "contains": ["int", "integer", "number"]
-        },
-        {
-            "type": "float",
-            "emoji": "🔢",
-            "color": "#6366F1",  # indigo
-            "bg_color": "#E0E7FF",
-            "contains": ["float", "decimal", "double"]
-        },
-        {
-            "type": "bool",
-            "emoji": "✓",
-            "color": "#EAB308",  # yellow
-            "bg_color": "#FEF9C3",
-            "contains": ["bool", "boolean"]
-        },
-        {
-            "type": "list",
-            "emoji": "📋",
-            "color": "#A855F7",  # purple
-            "bg_color": "#F3E8FF",
-            "contains": ["list", "array"]
-        },
-        {
-            "type": "dict",
-            "emoji": "🗂",
-            "color": "#EC4899",  # pink
-            "bg_color": "#FCE7F3",
-            "contains": ["dict", "dictionary", "object"]
-        },
-        {
-            "type": "datetime",
-            "emoji": "📅",
-            "color": "#64748B",  # slate
-            "bg_color": "#F1F5F9",
-            "contains": ["datetime", "date", "time"]
-        },
-        {
-            "type": "file",
-            "emoji": "📄",
-            "color": "#F97316",  # orange
-            "bg_color": "#FFEDD5",
-            "contains": ["file", "binary", "blob"]
-        },
-        {
-            "type": "email",
-            "emoji": "📧",
-            "color": "#EF4444",  # red
-            "bg_color": "#FEE2E2",
-            "contains": ["email", "mail"]
-        },
-        {
-            "type": "url",
-            "emoji": "🔗",
-            "color": "#06B6D4",  # cyan
-            "bg_color": "#CFFAFE",
-            "contains": ["url", "uri", "link"]
-        },
-        {
-            "type": "password",
-            "emoji": "🔒",
-            "color": "#475569",  # slate
-            "bg_color": "#F1F5F9",
-            "contains": ["password", "secret"]
-        },
-        {
-            "type": "id",
-            "emoji": "🔒",
-            "color": "#0EA5E9",  # sky
-            "bg_color": "#E0F2FE",
-            "contains": ["id", "identifier", "uuid"]
-        }
-    ]
+    # Type definitions imported from type_definitions.py
+    _type_definitions = TYPE_DEFINITIONS
 
     # Class-level registry
     _registry = {
@@ -249,42 +166,30 @@ class CacaoDocs:
                         if not line:
                             continue
                             
-                        # Check if this is a new argument
-                        parts = re.match(r'(\w+)\s*\(([^)]+)\)\s*(?:@|\s)\s*(.*)', line)
+                        # New regex pattern to better match the format "name (type): description"
+                        parts = re.match(r'(\w+)\s*\(([^)]+)\)\s*:\s*(.+)?', line)
                         if parts:
                             arg_name = parts.group(1).strip()
                             arg_type = parts.group(2).strip()
-                            arg_desc = parts.group(3).strip()
+                            arg_desc = parts.group(3).strip() if parts.group(3) else ""
+                            
+                            # Find matching type definition
+                            type_def = None
+                            for td in TYPE_DEFINITIONS:
+                                name_matches = any(pattern in arg_name.lower() for pattern in td['arg_matches']['name'])
+                                type_matches = any(pattern == arg_type.lower() for pattern in td['arg_matches']['type'])
+                                if name_matches or type_matches:
+                                    type_def = td
+                                    break
+                            
                             args_dict[arg_name] = {
                                 'type': arg_type,
-                                'description': arg_desc
+                                'description': arg_desc,
+                                'emoji': type_def['emoji'] if type_def else '📎',
+                                'color': type_def['color'] if type_def else '#c543ab',
+                                'bg_color': type_def['bg_color'] if type_def else '#F3F4F6'
                             }
-                        else:
-                            # Fallback if pattern doesn't match
-                            parts = re.match(r'(\w+)\s*\(([^)]+)\)', line)
-                            if parts:
-                                arg_name = parts.group(1).strip()
-                                arg_type = parts.group(2).strip()
-                                args_dict[arg_name] = {
-                                    'type': arg_type,
-                                    'description': ''
-                                }
-                            else:
-                                # If type is missing
-                                parts = line.split(':', 1)
-                                if len(parts) > 1:
-                                    arg_name = parts[0].strip()
-                                    arg_desc = parts[1].strip()
-                                    args_dict[arg_name] = {
-                                        'type': 'Unknown',
-                                        'description': arg_desc
-                                    }
-                                else:
-                                    args_dict[line] = {
-                                        'type': 'Unknown',
-                                        'description': ''
-                                    }
-                    
+
                     metadata[section] = args_dict
                     continue
 
@@ -322,18 +227,39 @@ class CacaoDocs:
         """
         def decorator(func):
             # Parse the docstring for metadata
-            docstring_metadata = cls.parse_docstring(func.__doc__, doc_type)  # Pass doc_type here
+            docstring_metadata = cls.parse_docstring(func.__doc__, doc_type)
 
-            # Merge the decorator arguments and docstring metadata
+            # Prepare the base metadata
             metadata = {
                 "function_name": func.__name__,
                 "tag": tag,
                 "type": doc_type
             }
+
+            # Merge in whatever we found in the docstring
             metadata.update(docstring_metadata)
 
+            # -- NEW: Capture function source code
+            try:
+                source = inspect.getsource(func)
+                metadata["function_source"] = source
+            except OSError:
+                # If source code not found (e.g., built-in or interactive function)
+                metadata["function_source"] = None
+
+            # -- NEW: Capture input variables and return type from signature
+            signature = inspect.signature(func)
+            input_names = list(signature.parameters.keys())
+            metadata["inputs"] = input_names  # array of parameter names
+
+            return_annotation = signature.return_annotation
+            if return_annotation is not inspect.Signature.empty:
+                metadata["outputs"] = str(return_annotation)  # store return annotation
+            else:
+                metadata["outputs"] = None
+
             # Register this item in the appropriate registry
-            if (doc_type in cls._registry):
+            if doc_type in cls._registry:
                 cls._registry[doc_type].append(metadata)
             else:
                 cls._registry['docs'].append(metadata)  # fallback
@@ -356,7 +282,11 @@ class CacaoDocs:
                 if first_type is None:
                     first_type = doc_type
                 display_name = cls.get_display_name(doc_type)
-                style = f'style="border-color: {cls._config["theme"]["primary_color"]}; color: {cls._config["theme"]["primary_color"]};"' if doc_type == first_type else 'style="border-color: transparent; color: #6B7280;"'
+                style = (
+                    f'style="border-color: {cls._config["theme"]["primary_color"]}; color: {cls._config["theme"]["primary_color"]};"'
+                    if doc_type == first_type else
+                    'style="border-color: transparent; color: #6B7280;"'
+                )
                 nav_items.append(
                     f'<button data-nav-item="{doc_type}" '
                     f'class="border-b-2 px-4 py-4 text-sm font-medium hover:border-gray-300 hover:text-gray-700" '
@@ -371,7 +301,7 @@ class CacaoDocs:
         
         # Load markdown content for the welcome page
         introduction_md_path = Path.cwd() / 'welcome.md'
-        if (introduction_md_path.exists()):
+        if introduction_md_path.exists():
             with open(introduction_md_path, 'r', encoding='utf-8') as f:
                 introduction_md = f.read()
                 introduction_html = markdown.markdown(introduction_md)
@@ -401,6 +331,13 @@ class CacaoDocs:
     def _build_content_sections(cls) -> str:
         """Build all content sections with type-based visibility."""
         sections = []
+        
+        # Add home content first with its own data-content attribute
+        sections.append('<div data-content="home" class="hidden">')
+        sections.append(cls._build_home_content())
+        sections.append('</div>')
+        
+        # Handle other content types
         for doc_type, items in cls._registry.items():
             if items and doc_type != 'api':  # Only handle non-API content here
                 sections.append(f'<div data-content="{doc_type}" class="hidden">')
@@ -417,8 +354,49 @@ class CacaoDocs:
         return "\n".join(sections)
 
     @classmethod
+    def _load_svg_icon(cls, icon_name: str) -> str:
+        """Load SVG icon content from file."""
+        try:
+            icon_path = Path(__file__).parent / 'templates' / 'assets' / 'img' / f'{icon_name}.svg'
+            with open(icon_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except Exception as e:
+            print(f"Warning: Could not load icon {icon_name}: {e}")
+            return ''
+
+    @classmethod
+    def _build_main_navigation(cls) -> str:
+        """Build the main navigation menu with SVG icons."""
+        nav_items = []
+        
+        # Configuration for navigation items
+        nav_config = {
+            'home': {'icon': 'home', 'title': 'Home'},
+            'api': {'icon': 'api', 'title': 'API'},
+            'types': {'icon': 'types', 'title': 'Types'},
+            'docs': {'icon': 'docs', 'title': 'Docs'}
+        }
+        
+        for page, config in nav_config.items():
+            svg_icon = cls._load_svg_icon(config['icon'])
+            nav_items.append(f'''
+                <a href="?page={page}" 
+                   data-nav-item="{page}" 
+                   class="block px-4 py-2 rounded flex items-center text-gray-700 hover:bg-gray-200">
+                    {svg_icon}
+                    <span class="ml-2">{config['title']}</span>
+                </a>
+            ''')
+        
+        return '\n'.join(nav_items)
+
+    @classmethod
     def _build_sidebar(cls) -> str:
-        """Return the HTML for the sidebar menu organized by doc type and tags."""
+        """Return the HTML for the sidebar menu including main navigation and section-specific content."""
+        # Build main navigation
+        main_nav = cls._build_main_navigation()
+        
+        # Build section-specific sidebar content
         nav_items = {}
         for doc_type, items in cls._registry.items():
             if items:
@@ -427,12 +405,13 @@ class CacaoDocs:
                     tag = item.get('tag', 'general')
                     nav_items[doc_type].setdefault(tag, []).append(item)
 
-        sidebar_parts = []
+        # Build the section-specific sidebar content
+        sidebar_sections = []
         for doc_type, tags in nav_items.items():
-            sidebar_parts.append(f'<div data-sidebar="{doc_type}" class="hidden">')  # Ensure data-sidebar attribute is set
+            sidebar_sections.append(f'<div data-sidebar="{doc_type}" class="hidden">')
             for tag, items in tags.items():
-                sidebar_parts.append(f'<div class="mb-4"><h3 class="text-gray-400 text-sm uppercase mt-4">{cls.get_tag_display(tag)}</h3>')
-                sidebar_parts.append('<ul class="space-y-2 mt-2">')
+                sidebar_sections.append(f'<div class="mb-4"><h3 class="text-gray-400 text-sm uppercase mt-4">{cls.get_tag_display(tag)}</h3>')
+                sidebar_sections.append('<ul class="space-y-2 mt-2">')
                 for item in items:
                     if doc_type == 'api':
                         display_name = item.get('endpoint', 'N/A')
@@ -444,7 +423,7 @@ class CacaoDocs:
                     anchor_id = f"{doc_type}-{item['function_name']}".lower().replace(" ", "-")
                     method = item.get('method', 'N/A').upper() if doc_type == 'api' else ''
                     
-                    sidebar_parts.append(f'''
+                    sidebar_sections.append(f'''
 <li>
   <a href="#{anchor_id}" class="block py-1 px-2 hover:bg-gray-700 rounded text-sm flex items-center">
     <span>{display_name}</span>
@@ -452,9 +431,78 @@ class CacaoDocs:
   </a>
 </li>
 ''')
-                sidebar_parts.append('</ul></div>')
-            sidebar_parts.append('</div>')
-        return "\n".join(sidebar_parts)
+                sidebar_sections.append('</ul></div>')
+            sidebar_sections.append('</div>')
+
+        # Combine main navigation and section-specific content
+        return f'''
+        <nav class="p-4 space-y-2">
+            {main_nav}
+        </nav>
+        <div class="sidebar-content">
+            {"".join(sidebar_sections)}
+        </div>
+        '''
+
+    @classmethod
+    def _build_secondary_sidebar(cls) -> str:
+        """Build the secondary sidebar content with search and section-specific filters."""
+        # Build section-specific sidebar content
+        nav_items = {}
+        for doc_type, items in cls._registry.items():
+            if items:
+                nav_items[doc_type] = {}
+                for item in items:
+                    tag = item.get('tag', 'general')
+                    nav_items[doc_type].setdefault(tag, []).append(item)
+
+        # Build the section-specific sidebar content
+        sidebar_sections = []
+        for doc_type, tags in nav_items.items():
+            sidebar_sections.append(f'<div data-sidebar-content="{doc_type}" class="hidden">')
+            for tag, items in tags.items():
+                sidebar_sections.append(f'<div class="mb-4"><h3 class="text-gray-400 text-sm uppercase mt-4">{cls.get_tag_display(tag)}</h3>')
+                sidebar_sections.append('<ul class="space-y-2 mt-2">')
+                for item in items:
+                    if doc_type == 'api':
+                        display_name = item.get('endpoint', 'N/A')
+                    elif doc_type == 'types':
+                        display_name = item.get('function_name', 'N/A')
+                    else:
+                        display_name = item.get('endpoint') or item.get('function_name') or 'N/A'
+                    
+                    anchor_id = f"{doc_type}-{item['function_name']}".lower().replace(" ", "-")
+                    method = item.get('method', 'N/A').upper() if doc_type == 'api' else ''
+                    
+                    sidebar_sections.append(f'''
+                        <li>
+                            <a href="#{anchor_id}" 
+                               class="block py-1 px-2 hover:bg-gray-700 rounded text-sm flex items-center">
+                                <span>{display_name}</span>
+                                {f'<span class="ml-2 px-2 py-0.5 text-xs rounded-full bg-opacity-20" style="background-color: {cls._config["theme"]["primary_color"]}; color: #FFFFFF;">{method}</span>' if method else ''}
+                            </a>
+                        </li>
+                    ''')
+                sidebar_sections.append('</ul></div>')
+            sidebar_sections.append('</div>')
+
+        # Return the complete secondary sidebar HTML
+        return f'''
+            <div class="p-4">
+                <div class="mb-4">
+                    <input
+                        type="text"
+                        placeholder="Search..."
+                        class="w-full px-4 py-2 rounded-lg border border-gray-600 
+                               bg-gray-800 text-white placeholder-gray-400"
+                        style="outline-color: {cls._config['theme']['primary_color']};"
+                    />
+                </div>
+                <div class="secondary-sidebar-content">
+                    {"".join(sidebar_sections)}
+                </div>
+            </div>
+        '''
 
     @classmethod
     def _build_endpoints_for_type(cls, doc_type: str) -> str:
@@ -519,10 +567,10 @@ class CacaoDocs:
             
             # Try different base paths to find the logo
             possible_paths = [
-                Path.cwd() / logo_path,  # From current working directory
-                Path(__file__).parent / logo_path,  # From module directory
+                Path.cwd() / logo_path,                # From current working directory
+                Path(__file__).parent / logo_path,     # From module directory
                 Path(__file__).parent.parent / logo_path,  # From project root
-                Path(logo_path)  # Direct path
+                Path(logo_path)                        # Direct path
             ]
             
             # Try each path until we find the logo
@@ -545,64 +593,33 @@ class CacaoDocs:
 
     @classmethod
     def get_html(cls) -> str:
-        """Generate HTML documentation."""
-        template_path = Path.cwd() / 'cacaodocs' / 'templates' / 'cacao_template.html'
-        if not template_path.exists():
-            return "<h1>Template file not found.</h1>"
-
-        with open(template_path, 'r', encoding='utf-8') as f:
-            template = f.read()
-
-        # Get unique statuses, tags, and versions for the filters
-        statuses = cls._get_unique_statuses()
-        status_options = '\n'.join([
-            '<option value="all">All Statuses</option>'
-        ] + [
-            f'<option value="{status.lower()}">{status}</option>'
-            for status in statuses
-        ])
-        
-        tags = cls._get_unique_tags()
-        tag_options = '\n'.join([
-            '<option value="all">All Tags</option>'
-        ] + [
-            f'<option value="{tag.lower()}">{cls.get_tag_display(tag)}</option>'
-            for tag in tags
-        ])
-        
-        versions = cls._get_unique_versions()
-        version_options = '\n'.join([
-            '<option value="all">All Versions</option>'
-        ] + [
-            f'<option value="{version.lower()}">{version}</option>'
-            for version in versions
-        ])
-
-        # Build API views
-        api_items = cls._registry.get('api', [])
-        cards_html = cls._build_card_view(api_items) if api_items else ''
-        table_html = cls._build_table_view(api_items) if api_items else ''
-
-        # Get base64 encoded logo
-        base64_logo = cls._get_base64_logo()
-        print(f"Logo encoded successfully: {bool(base64_logo)}")  # Debug line
-
-        # Replace placeholders
-        template = template.replace("{{ TITLE }}", cls._config['title'])
-        template = template.replace("{{ DESCRIPTION }}", cls._config['description'])
-        template = template.replace("{{ TYPE_NAV }}", cls._build_type_nav())
-        template = template.replace("{{ SIDEBAR }}", cls._build_sidebar())
-        template = template.replace("{{ HOME_CONTENT }}", cls._build_home_content())
-        template = template.replace("{{ STATUS_OPTIONS }}", status_options)
-        template = template.replace("{{ TAG_OPTIONS }}", tag_options)
-        template = template.replace("{{ VERSION_OPTIONS }}", version_options)
-        template = template.replace("{{ API_CARD_CONTENT }}", cards_html)
-        template = template.replace("{{ API_TABLE_CONTENT }}", table_html)
-        template = template.replace("{{ CONTENT_SECTIONS }}", cls._build_content_sections())
-        template = template.replace("{{ PRIMARY_COLOR }}", cls._config['theme']['primary_color'])
-        template = template.replace("{{ logo_url }}", base64_logo)
-
-        return template
+        template = cls._jinja_env.get_template('cacao_template.html')
+        context = {
+            "TITLE": cls._config['title'],
+            "DESCRIPTION": cls._config['description'],
+            "TYPE_NAV": cls._build_type_nav(),
+            "SIDEBAR": cls._build_sidebar(),
+            "SECOND_SIDEBAR": cls._build_secondary_sidebar(),
+            "HOME_CONTENT": cls._build_home_content(),
+            "STATUS_OPTIONS": '\n'.join(
+                ['<option value="all">All Statuses</option>'] +
+                [f'<option value="{s.lower()}">{s}</option>' for s in cls._get_unique_statuses()]
+            ),
+            "TAG_OPTIONS": '\n'.join(
+                ['<option value="all">All Tags</option>'] +
+                [f'<option value="{t.lower()}">{cls.get_tag_display(t)}</option>' for t in cls._get_unique_tags()]
+            ),
+            "VERSION_OPTIONS": '\n'.join(
+                ['<option value="all">All Versions</option>'] +
+                [f'<option value="{v.lower()}">{v}</option>' for v in cls._get_unique_versions()]
+            ),
+            "API_CARD_CONTENT": cls._build_card_view(cls._registry.get('api', [])),
+            "API_TABLE_CONTENT": cls._build_table_view(cls._registry.get('api', [])),
+            "CONTENT_SECTIONS": cls._build_content_sections(),
+            "PRIMARY_COLOR": cls._config['theme']['primary_color'],
+            "LOGO_URL": cls._get_base64_logo(),
+        }
+        return template.render(**context)
 
     @classmethod
     def _build_endpoints(cls, filter_type: str = None) -> tuple[str, str]:
@@ -663,9 +680,9 @@ class CacaoDocs:
                 'json_body': json_body,
                 'returns': returns_data,
                 'raises': item.get('raises'),
-                'registry': cls._registry,  # Add the registry to the context
+                'registry': cls._registry,
                 'PRIMARY_COLOR': cls._config['theme']['primary_color'],
-                'type_definitions': cls._type_definitions  # Add type definitions to context
+                'type_definitions': cls._type_definitions
             }
             
             html.append(template.render(**context))
@@ -678,6 +695,5 @@ class CacaoDocs:
         template = cls._jinja_env.get_template('components/api_table.html')
         return template.render(
             items=items,
-            PRIMARY_COLOR=cls._config['theme']['primary_color']  # Add this line
+            PRIMARY_COLOR=cls._config['theme']['primary_color']
         )
-
