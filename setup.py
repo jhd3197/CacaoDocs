@@ -1,11 +1,15 @@
 from setuptools import setup, find_packages
+import pathlib
 
-with open("README.md", "r", encoding="utf-8") as fh:
-    long_description = fh.read()
+# Get the directory containing this file
+HERE = pathlib.Path(__file__).parent
+
+# Read the README file
+long_description = (HERE / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="cacaodocs",
-    version="0.1.0",
+    version="0.1.1",
     author="Juan Denis",
     author_email="juan@vene.co",
     description="A lightweight Python package to extract API documentation from docstrings.",
@@ -22,4 +26,5 @@ setup(
     install_requires=[
         # List your package dependencies here
     ],
+    include_package_data=True,
 )
