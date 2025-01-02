@@ -36,5 +36,4 @@ setup(
         "Werkzeug==2.0.0",
         "Flask-Cors==5.0.0",
     ],
-    include_package_data=True,
 )
