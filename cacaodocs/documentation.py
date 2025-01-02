@@ -12,9 +12,12 @@ import base64
 from .type_definitions import TYPE_DEFINITIONS
 from bs4 import BeautifulSoup
 import textwrap
+import logging  # Add this line
 
 class CacaoDocs:
     """A class to handle documentation processes for Python code."""
+
+    _logger = logging.getLogger(__name__)  # Add this line
 
     # Default config includes 'verbose': False so logs are off by default
     _config = {
@@ -458,16 +461,19 @@ class CacaoDocs:
 
     @classmethod
     def get_html(cls) -> str:
+        # Retrieve JSON content
         json_content = cls.get_json()
-        print("JSON content to embed:", json_content)
-        
-        # Path to the index.html file
-        index_html_path = os.path.join("cacaodocs", "frontend", "build", "index.html")
-        
+    
+        # Dynamically calculate the path to index.html based on the current file location
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        print(f"Current directory: {current_dir}")  # Replace print with logging
+        index_html_path = os.path.join(current_dir, "frontend", "build", "index.html")
+    
+        # Read the HTML file
         try:
             with open(index_html_path, 'r', encoding='utf-8') as file:
                 html_content = file.read()
-            print(f"Successfully read {index_html_path}")
+            cls._logger.debug(f"Successfully read {index_html_path}")  # Replace print with logging
         except FileNotFoundError:
             raise FileNotFoundError(f"index.html not found at path: {index_html_path}")
         except Exception as e:
@@ -489,11 +495,11 @@ class CacaoDocs:
                     style_tag.string = css_content
                     # Replace the <link> tag with the <style> tag
                     link_tag.replace_with(style_tag)
-                    print(f"Inlined CSS from {css_path}")
+                    cls._logger.debug(f"Inlined CSS from {css_path}")  # Replace print with logging
                 except FileNotFoundError:
-                    print(f"CSS file not found: {css_path}. Skipping inlining for this file.")
+                    cls._logger.debug(f"CSS file not found: {css_path}. Skipping inlining for this file.")  # Replace print with logging
                 except Exception as e:
-                    print(f"Error inlining CSS file {css_path}: {e}. Skipping inlining for this file.")
+                    cls._logger.debug(f"Error inlining CSS file {css_path}: {e}. Skipping inlining for this file.")  # Replace print with logging
         
         # Inline JavaScript files
         for script_tag in soup.find_all('script', src=True):
@@ -508,18 +514,18 @@ class CacaoDocs:
                     new_script_tag.string = js_content
                     # Replace the old <script> tag with the new one
                     script_tag.replace_with(new_script_tag)
-                    print(f"Inlined JavaScript from {js_path}")
+                    cls._logger.debug(f"Inlined JavaScript from {js_path}")  # Replace print with logging
                 except FileNotFoundError:
-                    print(f"JavaScript file not found: {js_path}. Skipping inlining for this file.")
+                    cls._logger.debug(f"JavaScript file not found: {js_path}. Skipping inlining for this file.")  # Replace print with logging
                 except Exception as e:
-                    print(f"Error inlining JavaScript file {js_path}: {e}. Skipping inlining for this file.")
+                    cls._logger.debug(f"Error inlining JavaScript file {js_path}: {e}. Skipping inlining for this file.")  # Replace print with logging
         
         # Find the existing script tag that defines window.globalData
         script_tags = soup.find_all('script')
         global_data_script_found = False
         for script in script_tags:
             if script.string and 'window.globalData' in script.string:
-                print("Found existing window.globalData script tag. Updating it.")
+                cls._logger.debug("Found existing window.globalData script tag. Updating it.")  # Replace print with logging
                 # Serialize the JSON content to a JavaScript object string
                 json_js = json.dumps(json_content, ensure_ascii=False, indent=4)
                 # Update the script content
@@ -528,7 +534,7 @@ class CacaoDocs:
                 break
         
         if not global_data_script_found:
-            print("No existing window.globalData script tag found. Creating a new one.")
+            cls._logger.debug("No existing window.globalData script tag found. Creating a new one.")  # Replace print with logging
             # Serialize the JSON content to a JavaScript object string
             json_js = json.dumps(json_content, ensure_ascii=False, indent=4)
             new_script_tag = soup.new_tag('script')
@@ -536,14 +542,14 @@ class CacaoDocs:
             # Insert the new script tag before the closing </body> tag
             if soup.body:
                 soup.body.append(new_script_tag)
-                print("Appended new window.globalData script tag to <body>.")
+                cls._logger.debug("Appended new window.globalData script tag to <body>.")  # Replace print with logging
             else:
                 # If <body> is not found, append the script at the end of the HTML
                 soup.append(new_script_tag)
-                print("Appended new window.globalData script tag to the end of the HTML.")
+                cls._logger.debug("Appended new window.globalData script tag to the end of the HTML.")  # Replace print with logging
         
         # Convert the modified soup back to a string
         updated_html = str(soup)
-        print("HTML content successfully updated.")
+        cls._logger.debug("HTML content successfully updated.")  # Replace print with logging
         
         return updated_html

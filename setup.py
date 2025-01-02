@@ -9,7 +9,7 @@ long_description = (HERE / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="cacaodocs",
-    version="0.1.3",
+    version="0.1.4",
     author="Juan Denis",
     author_email="juan@vene.co",
     description="A lightweight Python package to extract API documentation from docstrings.",
@@ -17,6 +17,10 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/jhd3197/CacaoDocs",
     packages=find_packages(),
+    package_data={
+        'cacaodocs': ['frontend/build/**/*'],
+    },
+    include_package_data=True,
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
