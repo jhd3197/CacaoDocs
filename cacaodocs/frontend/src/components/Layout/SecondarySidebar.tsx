@@ -1,23 +1,61 @@
-import React, { ReactNode, useState, CSSProperties } from 'react';
+import React, { ReactNode, useState, useMemo, CSSProperties } from 'react';
 import { Menu, Tag, Typography, Input } from 'antd';
 import { useLocation } from 'react-router-dom';
 import { ApiOutlined, SearchOutlined, CodeOutlined, BookOutlined } from '@ant-design/icons';
-import localData from '../../data/localData.json';
 import './SecondarySidebar.css';
 
 const { Text } = Typography;
 const { SubMenu } = Menu;
 
+interface ApiItem {
+    endpoint: string;
+    method: string;
+    tag: string;
+}
+
+interface TypeItem {
+    function_name: string;
+    tag: string;
+}
+
+interface ReturnType {
+    description: string;
+    full_type: string;
+    is_list: boolean;
+    is_type_ref: boolean;
+    type_name: string;
+}
+
+interface DocItem {
+    args?: Record<string, any>;
+    description?: string;
+    function_name: string;
+    method?: string;
+    returns?: ReturnType;
+    status?: string;
+    tag: string;
+    type: string;
+    version?: string;
+    function_source?: string;
+    inputs?: string[];
+    outputs?: string | null;
+}
+
 interface SecondarySidebarProps {
     onEndpointSelect?: (endpoint: string) => void;
+    data: {
+        api: ApiItem[];
+        docs: DocItem[];
+        types: TypeItem[];
+    };
 }
 
 const methodColors: Record<string, string> = {
-    GET: '#10B981',    // Green
-    POST: '#331201',   // Brown
-    PUT: '#331201',    // Brown
-    DELETE: '#EF4444', // Red
-    PATCH: '#8B5CF6'   // Purple
+    GET: '#10B981',
+    POST: '#331201',
+    PUT: '#331201',
+    DELETE: '#EF4444',
+    PATCH: '#8B5CF6'
 };
 
 const MENU_STYLES = {
@@ -55,7 +93,7 @@ const MENU_STYLES = {
     },
     subMenu: {
         fontWeight: 600,
-        color: '#E6D5C9',  // Updated color
+        color: '#E6D5C9',
         fontSize: '14px',
         textTransform: 'uppercase' as const,
         letterSpacing: '0.05em',
@@ -76,7 +114,7 @@ const MENU_STYLES = {
 };
 
 const EndpointItem: React.FC<{
-    endpoint: any;
+    endpoint: ApiItem;
     onClick: () => void;
 }> = ({ endpoint, onClick }) => (
     <div
@@ -115,7 +153,7 @@ const EndpointItem: React.FC<{
             color={methodColors[endpoint.method]}
             style={{
                 margin: 0,
-                padding: '0px 4px',  // Modified padding
+                padding: '0px 4px',
                 borderRadius: '4px',
                 fontSize: '11px',
                 lineHeight: '18px',
@@ -127,37 +165,66 @@ const EndpointItem: React.FC<{
     </div>
 );
 
-interface ReturnType {
-    description: string;
-    full_type: string;
-    is_list: boolean;
-    is_type_ref: boolean;
-    type_name: string;
-}
+const SearchInput: React.FC<{
+    value: string;
+    onChange: (value: string) => void;
+}> = React.memo(({ value, onChange }) => (
+    <Input
+        prefix={<SearchOutlined style={{ color: '#654321' }} />}
+        placeholder="Search..."
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        autoFocus
+        className="search-input"
+        style={{
+            borderRadius: '6px',
+            backgroundColor: '#FFFFFF',
+            borderColor: 'rgba(255, 255, 255, 0.2)',
+            color: '#654321'
+        }}
+    />
+));
 
-interface DocItem {
-    args?: Record<string, any>;  // Made optional
-    description?: string;        // Made optional
-    function_name: string;
-    method?: string;            // Made optional
-    returns?: ReturnType;       // Made optional
-    status?: string;            // Made optional
-    tag: string;
-    type: string;
-    version?: string;           // Made optional
-    function_source?: string;   // Added
-    inputs?: string[];          // Added
-    outputs?: string | null;    // Updated to accept null
-}
+const MenuContainer: React.FC<{ 
+    children: ReactNode; 
+    searchText: string; 
+    onSearchChange: (value: string) => void;
+    openKeys: string[];
+}> = ({ children, searchText, onSearchChange, openKeys }) => (
+    <div style={MENU_STYLES.container}>
+        <div style={MENU_STYLES.search}>
+            <SearchInput value={searchText} onChange={onSearchChange} />
+        </div>
+        <Menu 
+            mode="inline" 
+            style={MENU_STYLES.base}
+            theme="dark"
+            className="custom-dark-menu"
+            defaultOpenKeys={openKeys}
+            openKeys={openKeys}
+        >
+            {children}
+        </Menu>
+    </div>
+);
 
-const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect }) => {
+const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, data }) => {
+    console.log('SecondarySidebar received data:', data); // Debug log
+    
+    // Add null checks and default arrays
+    const safeData = {
+        api: Array.isArray(data?.api) ? data.api : [],
+        docs: Array.isArray(data?.docs) ? data.docs : [],
+        types: Array.isArray(data?.types) ? data.types : []
+    };
+
     const location = useLocation();
     const [searchText, setSearchText] = useState('');
 
-    const filterItems = (items: any[]) => {
+    const filterItems = <T extends { function_name?: string; endpoint?: string }>(items: T[]) => {
         return items.filter(item => 
-            item.function_name?.toLowerCase().includes(searchText.toLowerCase()) ||
-            item.endpoint?.toLowerCase().includes(searchText.toLowerCase())
+            (item.function_name?.toLowerCase().includes(searchText.toLowerCase()) ||
+            item.endpoint?.toLowerCase().includes(searchText.toLowerCase()))
         );
     };
 
@@ -165,13 +232,15 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect })
     const isTypesPage = location.pathname.includes('/types');
     const isDocsPage = location.pathname.includes('/docs');
 
-    // Get all tags for each section
-    const apiTags = Array.from(new Set(localData.api.map(item => item.tag)));
-    const docsTags = Array.from(new Set(localData.docs.map(item => item.tag)));
-    const typesTags = Array.from(new Set(localData.types.map(item => item.tag)));
+    // Memoize tags to prevent infinite re-renders
+    const allTags = useMemo(() => {
+        const apiTags = Array.from(new Set(safeData.api.map(item => item.tag)));
+        const docsTags = Array.from(new Set(safeData.docs.map(item => item.tag)));
+        const typesTags = Array.from(new Set(safeData.types.map(item => item.tag)));
+        return [...apiTags, ...docsTags, ...typesTags] as string[];
+    }, [safeData]);
 
-    // Combine all possible tags
-    const allTags = [...apiTags, ...docsTags, ...typesTags];
+    const [openKeys, setOpenKeys] = useState<string[]>(allTags);
 
     const SECTION_ICONS = {
         api: <ApiOutlined style={{ color: '#fff' }} />,
@@ -179,45 +248,16 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect })
         docs: <BookOutlined style={{ color: '#fff' }} />
     };
 
-    const MenuContainer: React.FC<{ children: ReactNode }> = ({ children }) => (
-        <div style={MENU_STYLES.container}>
-            <div style={MENU_STYLES.search}>
-                <Input
-                    prefix={<SearchOutlined style={{ color: 'rgba(255, 255, 255, 0.65)' }} />}
-                    placeholder="Search..."
-                    onChange={(e) => setSearchText(e.target.value)}
-                    className="search-input" // Added className
-                    style={{
-                        borderRadius: '6px',
-                        backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                        borderColor: 'rgba(255, 255, 255, 0.2)',
-                        color: '#FFFFFF'
-                    }}
-                />
-            </div>
-            <Menu 
-                mode="inline" 
-                style={MENU_STYLES.base}
-                defaultOpenKeys={allTags}
-                theme="dark"
-                className="custom-dark-menu"
-            >
-                {children}
-            </Menu>
-        </div>
-    );
-
     if (isTypesPage) {
-        const typesByTag = localData.types.reduce((acc, type) => {
-            if (!acc[type.tag]) {
-                acc[type.tag] = [];
-            }
-            acc[type.tag].push(type);
-            return acc;
-        }, {} as Record<string, typeof localData.types>);
-
-        // Get all tags for default open keys
-        const allTags = Object.keys(typesByTag);
+        const typesByTag = Object.entries(
+            filterItems(safeData.types).reduce((acc: Record<string, TypeItem[]>, type) => {
+                if (!acc[type.tag]) {
+                    acc[type.tag] = [];
+                }
+                acc[type.tag].push(type);
+                return acc;
+            }, {})
+        );
 
         const scrollToType = (functionName: string) => {
             const element = document.getElementById(`type-${functionName}`);
@@ -227,8 +267,12 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect })
         };
 
         return (
-            <MenuContainer>
-                {Object.entries(typesByTag).map(([tag, types]) => (
+            <MenuContainer 
+                searchText={searchText} 
+                onSearchChange={setSearchText}
+                openKeys={allTags}
+            >
+                {typesByTag.map(([tag, types]) => (
                     <SubMenu 
                         key={tag} 
                         title={
@@ -252,17 +296,16 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect })
         );
     }
 
-    // Add docs page handling
     if (isDocsPage) {
-        const docsByTag = localData.docs.reduce((acc, doc) => {
-            if (!acc[doc.tag]) {
-                acc[doc.tag] = [];
-            }
-            acc[doc.tag].push(doc);
-            return acc;
-        }, {} as Record<string, DocItem[]>); // Updated type assertion
-
-        const allTags = Object.keys(docsByTag);
+        const docsByTag = Object.entries(
+            filterItems(safeData.docs).reduce((acc: Record<string, DocItem[]>, doc) => {
+                if (!acc[doc.tag]) {
+                    acc[doc.tag] = [];
+                }
+                acc[doc.tag].push(doc);
+                return acc;
+            }, {})
+        );
 
         const scrollToDoc = (functionName: string) => {
             const element = document.getElementById(`doc-${functionName}`);
@@ -272,8 +315,12 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect })
         };
 
         return (
-            <MenuContainer>
-                {Object.entries(docsByTag).map(([tag, docs]) => (
+            <MenuContainer 
+                searchText={searchText} 
+                onSearchChange={setSearchText}
+                openKeys={allTags}
+            >
+                {docsByTag.map(([tag, docs]) => (
                     <SubMenu 
                         key={tag} 
                         title={
@@ -283,12 +330,12 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect })
                             </span>
                         }
                     >
-                        {docs.map(doc => (
+                        {docs.map(document => (
                             <Menu.Item 
-                                key={doc.function_name}
-                                onClick={() => scrollToDoc(doc.function_name)}
+                                key={document.function_name}
+                                onClick={() => scrollToDoc(document.function_name)}
                             >
-                                {doc.function_name} ( ) 
+                                {document.function_name} ( ) 
                             </Menu.Item>
                         ))}
                     </SubMenu>
@@ -298,26 +345,41 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect })
     }
 
     if (isApiPage) {
+        const filteredEndpoints = filterItems(safeData.api);
+        
+        const scrollToEndpoint = (endpoint: string) => {
+            const element = document.getElementById(`api-${endpoint}`);
+            if (element) {
+                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        };
+
         const groupedEndpoints = Object.entries(
-            localData.api.reduce((acc, endpoint) => {
+            filteredEndpoints.reduce((acc: Record<string, ApiItem[]>, endpoint) => {
                 const tag = endpoint.tag;
                 if (!acc[tag]) acc[tag] = [];
                 acc[tag].push(endpoint);
                 return acc;
-            }, {} as Record<string, any[]>)
+            }, {})
         ).sort(([a], [b]) => a.localeCompare(b));
 
+        console.log('Grouped API endpoints:', groupedEndpoints); // Debug log
+
         return (
-            <MenuContainer>
+            <MenuContainer 
+                searchText={searchText} 
+                onSearchChange={setSearchText}
+                openKeys={allTags}
+            >
                 {groupedEndpoints.map(([tag, endpoints]) => (
                     <Menu.SubMenu
                         key={tag}
-                        style={{ background: 'transparent' }} // Changed from #fff to transparent
+                        style={{ background: 'transparent' }}
                         title={
                             <span style={{ 
                                 fontSize: '14px',
                                 fontWeight: 600,
-                                color: '#fff', // Changed to white
+                                color: '#fff',
                                 textTransform: 'uppercase',
                                 letterSpacing: '0.05em',
                                 display: 'flex',
@@ -330,11 +392,14 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect })
                         }
                     >
                         <div style={{ padding: '0 4px' }}>
-                            {filterItems(endpoints).map((endpoint) => (
+                            {filterItems(endpoints).map((endpoint: ApiItem) => (
                                 <EndpointItem
                                     key={endpoint.endpoint}
                                     endpoint={endpoint}
-                                    onClick={() => onEndpointSelect?.(endpoint.endpoint)}
+                                    onClick={() => {
+                                        onEndpointSelect?.(endpoint.endpoint);
+                                        scrollToEndpoint(endpoint.endpoint);
+                                    }}
                                 />
                             ))}
                         </div>
@@ -344,9 +409,12 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect })
         );
     }
 
-    // Default sidebar content for other pages
     return (
-        <MenuContainer>
+        <MenuContainer 
+            searchText={searchText} 
+            onSearchChange={setSearchText}
+            openKeys={allTags}
+        >
             <Menu.Item key="1">Introduction</Menu.Item>
             <Menu.Item key="2">Quick Start</Menu.Item>
             <Menu.Item key="3">Installation</Menu.Item>

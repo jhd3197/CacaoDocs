@@ -29,7 +29,7 @@ const TypeCard: React.FC<{ type: TypeDefinition }> = ({ type }) => {
             title={
                 <Space direction="vertical" style={{ width: '100%' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Title level={4} style={{ margin: 0 }}>{type.function_name}</Title>
+                        <Title level={4} style={{ margin: 0, marginTop:'10px' }}>{type.function_name}</Title>
                         <Tag color="blue">{type.tag}</Tag>
                     </div>
                     <Text type="secondary">{type.description}</Text>
@@ -49,7 +49,7 @@ const TypeCard: React.FC<{ type: TypeDefinition }> = ({ type }) => {
                                 description={value.description}
                             />
                             <Tag color={value.color} style={{ fontSize: '15px', padding: '5px 15px' }}>
-                                {value.type} <span>{value.emoji}</span>
+                                <span>{value.emoji}</span>  {value.type}
                             </Tag>
                         </List.Item>
                     )}

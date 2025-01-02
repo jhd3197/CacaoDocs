@@ -3,6 +3,7 @@ import { Layout as AntLayout } from 'antd';
 import { useLocation } from 'react-router-dom';
 import MainSidebar from './MainSidebar';
 import SecondarySidebar from './SecondarySidebar';
+import type { AppData } from '../../global';
 
 const { Content, Sider } = AntLayout;
 
@@ -11,10 +12,11 @@ const MAIN_SIDEBAR_WIDTH = 180;
 const SECONDARY_SIDEBAR_WIDTH = 240;
 
 interface LayoutProps {
+    apiData: AppData;
     children: ReactNode;
 }
 
-const CustomLayout: React.FC<LayoutProps> = ({ children }) => {
+const CustomLayout: React.FC<LayoutProps> = ({ apiData, children }) => {
     const location = useLocation();
     const isHomePage = location.pathname === '/';
     const needsSecondarySidebar = !isHomePage;
@@ -47,7 +49,7 @@ const CustomLayout: React.FC<LayoutProps> = ({ children }) => {
                             zIndex: 1
                         }}
                     >
-                        <SecondarySidebar />
+                        <SecondarySidebar data={apiData} /> {/* Pass apiData to SecondarySidebar */}
                     </Sider>
                 )}
                 <Content style={{ 

@@ -1,21 +1,22 @@
 # cacaodocs/documentation.py
-
 import re
 import json
 import yaml
-import inspect  # <-- Import inspect to get function source and signature
+import inspect
 from pathlib import Path
 from typing import Dict, List, Optional
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 import os
-import markdown  # Add import for markdown processing
-import base64  # Add this import
+import markdown
+import base64
 from .type_definitions import TYPE_DEFINITIONS
+from bs4 import BeautifulSoup
+import textwrap
 
 class CacaoDocs:
     """A class to handle documentation processes for Python code."""
 
-    # Default configuration
+    # Default config includes 'verbose': False so logs are off by default
     _config = {
         "title": "Documentation",
         "description": "Welcome to the documentation.",
@@ -30,23 +31,21 @@ class CacaoDocs:
             "docs": "Documentation"
         },
         "tag_mappings": {},
-        "logo_url": "cacaodocs/templates/assets/img/logo.png"  # Add default logo path
+        "logo_url": "cacaodocs/templates/assets/img/logo.png",
+        "verbose": False,  # Turn on/off verbose logs here or via cacao.yaml
+        "exclude_inputs": ["self"]
     }
 
-    # Type definitions imported from type_definitions.py
     _type_definitions = TYPE_DEFINITIONS
 
-    # Class-level registry
     _registry = {
         'api': [],
         'types': [],
         'docs': []
     }
 
-    # Add custom Jinja2 filters
     @staticmethod
     def _regex_search(value, pattern):
-        """Custom filter for regex search."""
         if not value:
             return None
         match = re.search(pattern, str(value))
@@ -54,12 +53,10 @@ class CacaoDocs:
 
     @staticmethod
     def _regex_replace(value, pattern, repl=''):
-        """Custom filter for regex replace."""
         if not value:
             return value
         return re.sub(pattern, repl, str(value))
 
-    # Update the _jinja_env initialization
     _jinja_env = Environment(
         loader=FileSystemLoader(os.path.join(os.path.dirname(__file__), 'templates')),
         autoescape=select_autoescape(['html', 'xml'])
@@ -70,57 +67,58 @@ class CacaoDocs:
     @classmethod
     def load_config(cls, config_path: Optional[str] = None) -> None:
         """
-        Load configuration from a YAML file.
-
-        Args:
-            config_path (str, optional): Path to the configuration file.
-                Defaults to looking for 'cacao.yaml' in the current directory.
+        Loads a YAML configuration file (cacao.yaml by default) and updates _config.
         """
         if config_path is None:
-            # Change to load 'cacao.yaml'
             config_path = Path.cwd() / 'cacao.yaml'
-        
         try:
             with open(config_path, 'r') as f:
                 config = yaml.safe_load(f)
                 cls._config.update(config)
-                print(f"Loaded configuration: {cls._config}")  # Debug line to verify config loading
+                if cls._config.get("verbose"):
+                    print(f"[CacaoDocs] Loaded configuration: {cls._config}")
         except FileNotFoundError:
-            print(f"Warning: No configuration file found at {config_path}")
+            if cls._config.get("verbose"):
+                print(f"[CacaoDocs] Warning: No configuration file found at {config_path}")
         except yaml.YAMLError as e:
-            print(f"Error parsing configuration file: {e}")
+            if cls._config.get("verbose"):
+                print(f"[CacaoDocs] Error parsing configuration file: {e}")
 
     @classmethod
     def get_display_name(cls, doc_type: str) -> str:
-        """Get the display name for a documentation type."""
         return cls._config['type_mappings'].get(doc_type, doc_type.title())
 
     @classmethod
     def get_tag_display(cls, tag: str) -> str:
-        """Get the display name for a tag."""
         return cls._config['tag_mappings'].get(tag, tag.title())
 
     @classmethod
     def configure(cls, **kwargs):
         """
-        Configure the documentation settings.
-
-        Args:
-            **kwargs: Configuration options including:
-                - title (str): Documentation title
-                - description (str): Documentation description
-                - version (str): API version
-                - theme (dict): Theme configuration
+        Update the configuration in code. Example:
+            CacaoDocs.configure(verbose=True)
         """
         cls._config.update(kwargs)
+        if cls._config.get("verbose"):
+            print("[CacaoDocs] Updated configuration:", cls._config)
 
-    @staticmethod
-    def parse_docstring(docstring: str, doc_type: str) -> dict:
-        """Parse complete docstring information including metadata and sections."""
+    @classmethod
+    def parse_docstring(cls, docstring: str, doc_type: str) -> dict:
+        """
+        Parse the complete docstring to extract custom metadata: Endpoint, Method,
+        Description, Responses, and more.
+        """
         if not docstring:
+            if cls._config.get("verbose"):
+                print("[CacaoDocs] No docstring provided.")
             return {}
 
-        # Basic metadata patterns
+        # Dedent to remove common leading whitespace
+        docstring = textwrap.dedent(docstring)
+        if cls._config.get("verbose"):
+            print(f"[CacaoDocs] Parsing docstring for doc_type='{doc_type}':\n{docstring}")
+
+        # Patterns to fetch standard metadata lines
         patterns = {
             "endpoint": r"Endpoint:\s*(.*)",
             "method": r"Method:\s*(.*)",
@@ -131,57 +129,63 @@ class CacaoDocs:
 
         metadata = {}
 
-        # Extract basic metadata
+        # Extract standard metadata from docstring
         for key, pattern in patterns.items():
             match = re.search(pattern, docstring)
             if match:
                 metadata[key] = match.group(1).strip()
+                if cls._config.get("verbose"):
+                    print(f"[CacaoDocs] Found {key}: {metadata[key]}")
 
-        # Extract sections with improved Returns handling
+        # Extended sections
         sections = {
-            "description": r"Description:\s*(.*?)(?=\n\s*(?:Args|JSON Body|Returns|Raises|$))",
-            "args": r"Args:\s*(.*?)(?=\n\s*(?:JSON Body|Returns|Raises|$))",
-            "json_body": r"JSON Body:\s*(.*?)(?=\n\s*(?:Returns|Raises|$))",
-            "returns": r"Returns:\s*(.*?)(?=\n\s*(?:Raises|$))",
-            "raises": r"Raises:\s*(.*?)(?=\n\s*(?:$))"
+            "description": r"Description:\s*(.*?)(?=\n\s*(?:Args|Data|JSON Body|Returns|Raises|Responses|$))",
+            "args": r"Args:\s*(.*?)(?=\n\s*(?:Data|JSON Body|Returns|Raises|Responses|$))",
+            "json_body": r"(?:Data|JSON Body):\s*(.*?)(?=\n\s*(?:Returns|Raises|Responses|$))",
+            "returns": r"Returns:\s*(.*?)(?=\n\s*(?:Raises|Responses|$))",
+            "raises": r"Raises:\s*(.*?)(?=\n\s*(?:Responses|$))",
+            "responses": r"Responses:\s*(.*?)(?=\n\s*$|$)"
         }
 
-        # Modified section for handling Args with type extraction
+        # Use the above regex to find each section in docstring
         for section, pattern in sections.items():
             match = re.search(pattern, docstring, re.DOTALL)
             if match:
                 content = match.group(1).strip()
-                
-                # Skip if content is "None"
-                if content.lower() == "none":
+                if not content or content.lower() == "none":
                     continue
-                
-                # Special handling for Args section
+
+                if section == "responses":
+                    # Attempt YAML parse
+                    metadata[section] = cls._parse_responses_section(content)
+                    continue
+
                 if section == "args":
+                    # Parse each line for "arg_name (type): description"
                     args_dict = {}
-                    args_lines = content.split('\n')
-                    
-                    for line in args_lines:
+                    for line in content.split('\n'):
                         line = line.strip()
                         if not line:
                             continue
-                            
-                        # New regex pattern to better match the format "name (type): description"
                         parts = re.match(r'(\w+)\s*\(([^)]+)\)\s*:\s*(.+)?', line)
                         if parts:
                             arg_name = parts.group(1).strip()
                             arg_type = parts.group(2).strip()
                             arg_desc = parts.group(3).strip() if parts.group(3) else ""
-                            
-                            # Find matching type definition
+
+                            # Try matching custom types if specified
                             type_def = None
-                            for td in TYPE_DEFINITIONS:
-                                name_matches = any(pattern in arg_name.lower() for pattern in td['arg_matches']['name'])
-                                type_matches = any(pattern == arg_type.lower() for pattern in td['arg_matches']['type'])
+                            for td in cls._type_definitions:
+                                name_matches = any(
+                                    p in arg_name.lower() for p in td['arg_matches']['name']
+                                )
+                                type_matches = any(
+                                    p == arg_type.lower() for p in td['arg_matches']['type']
+                                )
                                 if name_matches or type_matches:
                                     type_def = td
                                     break
-                            
+
                             args_dict[arg_name] = {
                                 'type': arg_type,
                                 'description': arg_desc,
@@ -189,19 +193,18 @@ class CacaoDocs:
                                 'color': type_def['color'] if type_def else '#c543ab',
                                 'bg_color': type_def['bg_color'] if type_def else '#F3F4F6'
                             }
-
                     metadata[section] = args_dict
                     continue
 
-                # Special handling for Returns section
-                elif section == "returns":
-                    type_pattern = r'@type\{((?:list\[)?(\w+)(?:\])?)\}:\s*(.*)'  # Updated pattern to capture list types
-                    type_match = re.search(type_pattern, content, re.IGNORECASE)  # Added case-insensitive flag
+                if section == "returns":
+                    # Looking for a pattern like @type{list[User]}: Some description
+                    type_pattern = r'@type\{((?:list\[)?(\w+)(?:\])?)\}:\s*(.*)'
+                    type_match = re.search(type_pattern, content, re.IGNORECASE)
                     if type_match:
-                        full_type = type_match.group(1)  # e.g., "list[User]" or "User"
-                        base_type = type_match.group(2)  # e.g., "User"
+                        full_type = type_match.group(1)
+                        base_type = type_match.group(2)
                         is_list = full_type.lower().startswith('list[')
-                        
+
                         metadata[section] = {
                             'is_type_ref': True,
                             'type_name': base_type,
@@ -209,12 +212,141 @@ class CacaoDocs:
                             'full_type': full_type,
                             'description': type_match.group(3).strip()
                         }
-                        continue
+                    else:
+                        metadata[section] = content
+                    continue
 
-                # Handle other sections normally
+                # For description, json_body, raises, store the raw content
                 metadata[section] = content
 
+        if cls._config.get("verbose"):
+            print("[CacaoDocs] Finished parsing docstring metadata:", metadata)
         return metadata
+    
+    @staticmethod
+    def _parse_responses_section(responses_section: str) -> dict:
+        """
+        A fully custom parser for a minimal, YAML-like 'Responses' section.
+        It allows arbitrary keys under 'Responses:' like 'Data:', '201:', etc.
+        Each block can have multiple fields, e.g.:
+
+            Data:
+                description: "Some text"
+                example: "{\n"key": "value"\n}"
+                notes: "Any other field"
+
+        This parser:
+        - Detects a top-level key line (e.g., 'Data:' or '201:') by regex
+        ^\s*(\S+)\s*:\s*$ at the start of the line.
+        - Gathers subsequent lines until the next top-level key or end of block.
+        - Within each block, it looks for subfields like 'description:', 'example:', 'anythingElse:'.
+        - For multiline content (like JSON under 'example:'), it accumulates lines until
+        the next subfield or the block ends.
+
+        Returns a dictionary where each top-level key has a dict of subfields.
+        Example output:
+        {
+        "Data": {
+            "example": "{\n    \"key\": \"value\"\n}",
+            "notes": "Any other field"
+        }
+        }
+        """
+
+        # 1. Split the entire block into lines
+        lines = responses_section.strip().splitlines()
+
+        # The final structure: { "Data": {...}, "201": {...}, ... }
+        final_responses = {}
+
+        # We track the "current block key" (e.g. 'Data') and the lines belonging to it
+        current_block_key = None
+        block_lines = []
+
+        # Regex to detect a top-level block key line, e.g. "Data:" or "201:" or "MyKey:"
+        block_key_pattern = re.compile(r'^\s*(\S+)\s*:\s*$')
+
+        def parse_fields(lines_block: list[str]) -> dict:
+            """
+            Parse a block of lines like:
+                description: "Hello!"
+                example:
+                    {
+                        "foo": "bar"
+                    }
+                notes: "anything"
+
+            Return a dict of the form:
+            {
+            "description": "Hello!",
+            "example": "{\n    \"foo\": \"bar\"\n}",
+            "notes": "anything"
+            }
+
+            We look for lines matching 'key:' to start a field. Subsequent lines
+            (indented or not) accumulate until the next field or end of block.
+            """
+            result = {}
+            current_field = None
+            buffer = []
+
+            field_pattern = re.compile(r'^\s*([^:]+)\s*:\s*(.*)$')  
+            # e.g. "description:" => group(1)="description", group(2)=maybe "Hello!" or empty
+
+            for line in lines_block:
+                stripped = line.rstrip()
+                if not stripped:
+                    # Blank line, keep as part of buffer or skip?
+                    if current_field:
+                        buffer.append("")
+                    continue
+
+                match = field_pattern.match(stripped)
+                if match:
+                    # We found a new field definition, so store the old field buffer first
+                    if current_field:
+                        # Store the previous field content
+                        result[current_field] = "\n".join(buffer).strip()
+                    # Reset for the new field
+                    current_field = match.group(1).strip()
+                    first_value = match.group(2).strip()  # Remainder on the same line
+                    buffer = []
+                    if first_value:
+                        buffer.append(first_value)
+                else:
+                    # This line is a continuation of the current field's content
+                    if current_field:
+                        buffer.append(stripped)
+
+            # At the end, store whatever was in the buffer
+            if current_field:
+                result[current_field] = "\n".join(buffer).strip()
+
+            return result
+
+        # 2. Iterate through lines to find top-level block keys
+        for line in lines:
+            # Check if line is a block key
+            m = block_key_pattern.match(line)
+            if m:
+                # If we already have a current block, parse its lines
+                if current_block_key is not None:
+                    parsed_fields = parse_fields(block_lines)
+                    final_responses[current_block_key] = parsed_fields
+
+                # Start a new block
+                current_block_key = m.group(1)
+                block_lines = []
+            else:
+                # This line belongs to the current block
+                block_lines.append(line)
+
+        # 3. If there's a trailing block at the end, parse it
+        if current_block_key is not None:
+            parsed_fields = parse_fields(block_lines)
+            final_responses[current_block_key] = parsed_fields
+
+        return final_responses
 
     @classmethod
     def doc_api(cls, doc_type: str = "api", tag: str = "general"):
@@ -226,46 +358,98 @@ class CacaoDocs:
             tag (str): Tag for grouping related items
         """
         def decorator(func):
-            # Parse the docstring for metadata
-            docstring_metadata = cls.parse_docstring(func.__doc__, doc_type)
+            # Grab the docstring
+            docstring = func.__doc__ or ""
+            # Parse out the metadata
+            docstring_metadata = cls.parse_docstring(docstring, doc_type)
 
-            # Prepare the base metadata
+            # Start building the metadata dictionary
             metadata = {
                 "function_name": func.__name__,
                 "tag": tag,
                 "type": doc_type
             }
-
-            # Merge in whatever we found in the docstring
             metadata.update(docstring_metadata)
 
-            # -- NEW: Capture function source code
+            # Attempt to get source code
             try:
                 source = inspect.getsource(func)
                 metadata["function_source"] = source
             except OSError:
-                # If source code not found (e.g., built-in or interactive function)
                 metadata["function_source"] = None
 
-            # -- NEW: Capture input variables and return type from signature
+            # Gather info on parameters (inputs) and return annotations
             signature = inspect.signature(func)
-            input_names = list(signature.parameters.keys())
-            metadata["inputs"] = input_names  # array of parameter names
-
+            exclude = cls._config.get("exclude_inputs", [])
+            metadata["inputs"] = [p for p in signature.parameters.keys() if p not in exclude]
             return_annotation = signature.return_annotation
-            if return_annotation is not inspect.Signature.empty:
-                metadata["outputs"] = str(return_annotation)  # store return annotation
-            else:
-                metadata["outputs"] = None
+            metadata["outputs"] = (
+                str(return_annotation) if return_annotation is not inspect.Signature.empty else None
+            )
 
-            # Register this item in the appropriate registry
+            # Auto-detect Flask route info from source
+            route_pattern = re.compile(
+                r'@app\.route\(\s*[\'"](.+?)[\'"]\s*(?:,\s*methods\s*=\s*\[([^\]]+)\])?\)'
+            )
+            route_match = route_pattern.search(source) if source else None
+            if route_match:
+                route = route_match.group(1).strip()
+                methods_str = route_match.group(2)
+                if methods_str:
+                    raw_methods = re.findall(r"[A-Z]+", methods_str.upper())
+                    flask_methods = [m for m in raw_methods]
+                else:
+                    flask_methods = ["GET"]  # default if not specified
+
+                if not metadata.get("endpoint"):
+                    metadata["endpoint"] = route
+
+                if not metadata.get("method"):
+                    metadata["method"] = ", ".join(flask_methods)
+
+            if cls._config.get("verbose"):
+                print(f"[CacaoDocs] Final metadata for {func.__name__}:", metadata)
+
+            # Register in global registry
             if doc_type in cls._registry:
                 cls._registry[doc_type].append(metadata)
             else:
-                cls._registry['docs'].append(metadata)  # fallback
+                cls._registry['docs'].append(metadata)
 
             return func
+
         return decorator
+
+    @classmethod
+    def get_one_of_each(cls) -> dict:
+        """Retrieve one configuration from each category."""
+        one_of_each = {}
+        for key, items in cls._registry.items():
+            # if key is "types" then set all the items
+            if key == "types":
+                one_of_each[key] = items
+            else:
+                one_of_each[key] = items[0] if items else None
+        return one_of_each
+
+    @classmethod
+    def get_two_of_each(cls) -> dict:
+        """Retrieve two configurations from each category."""
+        two_of_each = {}
+        for key, items in cls._registry.items():
+            if key == "types":
+                two_of_each[key] = items
+            else:
+                two_of_each[key] = items[:2] if len(items) >= 2 else items
+        return two_of_each
+
+    @classmethod
+    def get_four_of_each(cls) -> dict:
+        """Retrieve four configurations from each category."""
+        four_of_each = {}
+        for key, items in cls._registry.items():
+            four_of_each[key] = items[:4] if len(items) >= 4 else items
+        return four_of_each
 
     @classmethod
     def get_json(cls) -> dict:
@@ -273,427 +457,93 @@ class CacaoDocs:
         return cls._registry
 
     @classmethod
-    def _build_type_nav(cls) -> str:
-        """Build the type navigation HTML."""
-        nav_items = []
-        first_type = None
-        for doc_type, items in cls._registry.items():
-            if items:
-                if first_type is None:
-                    first_type = doc_type
-                display_name = cls.get_display_name(doc_type)
-                style = (
-                    f'style="border-color: {cls._config["theme"]["primary_color"]}; color: {cls._config["theme"]["primary_color"]};"'
-                    if doc_type == first_type else
-                    'style="border-color: transparent; color: #6B7280;"'
-                )
-                nav_items.append(
-                    f'<button data-nav-item="{doc_type}" '
-                    f'class="border-b-2 px-4 py-4 text-sm font-medium hover:border-gray-300 hover:text-gray-700" '
-                    f'{style} onclick="switchType(\'{doc_type}\')">{display_name}</button>'
-                )
-        return "\n".join(nav_items)
-
-    @classmethod
-    def _build_home_content(cls) -> str:
-        """Build the home page content from custom sections in config."""
-        sections = []
-        
-        # Load markdown content for the welcome page
-        introduction_md_path = Path.cwd() / 'welcome.md'
-        if introduction_md_path.exists():
-            with open(introduction_md_path, 'r', encoding='utf-8') as f:
-                introduction_md = f.read()
-                introduction_html = markdown.markdown(introduction_md)
-                sections.append(f"""
-                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-                    <h2 class="text-2xl font-bold mb-4" style="color: {cls._config['theme']['primary_color']}">Welcome</h2>
-                    <div class="prose max-w-none">
-                        {introduction_html}
-                    </div>
-                </div>
-                """)
-        
-        # Add version info
-        sections.append(f"""
-        <div class="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 class="text-2xl font-bold mb-4" style="color: {cls._config['theme']['primary_color']}">System Information</h2>
-            <dl class="grid grid-cols-2 gap-4">
-                <dt class="font-medium">Version</dt>
-                <dd>{cls._config.get('version', '1.0.0')}</dd>
-            </dl>
-        </div>
-        """)
-
-        return "\n".join(sections)
-
-    @classmethod
-    def _build_content_sections(cls) -> str:
-        """Build all content sections with type-based visibility."""
-        sections = []
-        
-        # Add home content first with its own data-content attribute
-        sections.append('<div data-content="home" class="hidden">')
-        sections.append(cls._build_home_content())
-        sections.append('</div>')
-        
-        # Handle other content types
-        for doc_type, items in cls._registry.items():
-            if items and doc_type != 'api':  # Only handle non-API content here
-                sections.append(f'<div data-content="{doc_type}" class="hidden">')
-                cards_html = cls._build_card_view(items)  # Just use card view for non-API types
-                sections.append(cards_html)
-                sections.append('</div>')
-        
-        # Add API content section
-        if cls._registry.get('api'):
-            sections.append('<div data-content="api" class="hidden">')
-            # API content is handled through API_CARD_CONTENT and API_TABLE_CONTENT placeholders
-            sections.append('</div>')
-        
-        return "\n".join(sections)
-
-    @classmethod
-    def _load_svg_icon(cls, icon_name: str) -> str:
-        """Load SVG icon content from file."""
-        try:
-            icon_path = Path(__file__).parent / 'templates' / 'assets' / 'img' / f'{icon_name}.svg'
-            with open(icon_path, 'r', encoding='utf-8') as f:
-                return f.read()
-        except Exception as e:
-            print(f"Warning: Could not load icon {icon_name}: {e}")
-            return ''
-
-    @classmethod
-    def _build_main_navigation(cls) -> str:
-        """Build the main navigation menu with SVG icons."""
-        nav_items = []
-        
-        # Configuration for navigation items
-        nav_config = {
-            'home': {'icon': 'home', 'title': 'Home'},
-            'api': {'icon': 'api', 'title': 'API'},
-            'types': {'icon': 'types', 'title': 'Types'},
-            'docs': {'icon': 'docs', 'title': 'Docs'}
-        }
-        
-        for page, config in nav_config.items():
-            svg_icon = cls._load_svg_icon(config['icon'])
-            nav_items.append(f'''
-                <a href="?page={page}" 
-                   data-nav-item="{page}" 
-                   class="block px-4 py-2 rounded flex items-center text-gray-700 hover:bg-gray-200">
-                    {svg_icon}
-                    <span class="ml-2">{config['title']}</span>
-                </a>
-            ''')
-        
-        return '\n'.join(nav_items)
-
-    @classmethod
-    def _build_sidebar(cls) -> str:
-        """Return the HTML for the sidebar menu including main navigation and section-specific content."""
-        # Build main navigation
-        main_nav = cls._build_main_navigation()
-        
-        # Build section-specific sidebar content
-        nav_items = {}
-        for doc_type, items in cls._registry.items():
-            if items:
-                nav_items[doc_type] = {}
-                for item in items:
-                    tag = item.get('tag', 'general')
-                    nav_items[doc_type].setdefault(tag, []).append(item)
-
-        # Build the section-specific sidebar content
-        sidebar_sections = []
-        for doc_type, tags in nav_items.items():
-            sidebar_sections.append(f'<div data-sidebar="{doc_type}" class="hidden">')
-            for tag, items in tags.items():
-                sidebar_sections.append(f'<div class="mb-4"><h3 class="text-gray-400 text-sm uppercase mt-4">{cls.get_tag_display(tag)}</h3>')
-                sidebar_sections.append('<ul class="space-y-2 mt-2">')
-                for item in items:
-                    if doc_type == 'api':
-                        display_name = item.get('endpoint', 'N/A')
-                    elif doc_type == 'types':
-                        display_name = item.get('function_name', 'N/A')
-                    else:
-                        display_name = item.get('endpoint') or item.get('function_name') or 'N/A'
-                    
-                    anchor_id = f"{doc_type}-{item['function_name']}".lower().replace(" ", "-")
-                    method = item.get('method', 'N/A').upper() if doc_type == 'api' else ''
-                    
-                    sidebar_sections.append(f'''
-<li>
-  <a href="#{anchor_id}" class="block py-1 px-2 hover:bg-gray-700 rounded text-sm flex items-center">
-    <span>{display_name}</span>
-    {f'<span class="ml-2 px-2 py-0.5 text-xs rounded-full" style="background-color: {cls._config["theme"]["primary_color"]}; color: #FFFFFF;">{method}</span>' if method else ''}
-  </a>
-</li>
-''')
-                sidebar_sections.append('</ul></div>')
-            sidebar_sections.append('</div>')
-
-        # Combine main navigation and section-specific content
-        return f'''
-        <nav class="p-4 space-y-2">
-            {main_nav}
-        </nav>
-        <div class="sidebar-content">
-            {"".join(sidebar_sections)}
-        </div>
-        '''
-
-    @classmethod
-    def _build_secondary_sidebar(cls) -> str:
-        """Build the secondary sidebar content with search and section-specific filters."""
-        # Build section-specific sidebar content
-        nav_items = {}
-        for doc_type, items in cls._registry.items():
-            if items:
-                nav_items[doc_type] = {}
-                for item in items:
-                    tag = item.get('tag', 'general')
-                    nav_items[doc_type].setdefault(tag, []).append(item)
-
-        # Build the section-specific sidebar content
-        sidebar_sections = []
-        for doc_type, tags in nav_items.items():
-            sidebar_sections.append(f'<div data-sidebar-content="{doc_type}" class="hidden">')
-            for tag, items in tags.items():
-                sidebar_sections.append(f'<div class="mb-4"><h3 class="text-gray-400 text-sm uppercase mt-4">{cls.get_tag_display(tag)}</h3>')
-                sidebar_sections.append('<ul class="space-y-2 mt-2">')
-                for item in items:
-                    if doc_type == 'api':
-                        display_name = item.get('endpoint', 'N/A')
-                    elif doc_type == 'types':
-                        display_name = item.get('function_name', 'N/A')
-                    else:
-                        display_name = item.get('endpoint') or item.get('function_name') or 'N/A'
-                    
-                    anchor_id = f"{doc_type}-{item['function_name']}".lower().replace(" ", "-")
-                    method = item.get('method', 'N/A').upper() if doc_type == 'api' else ''
-                    
-                    sidebar_sections.append(f'''
-                        <li>
-                            <a href="#{anchor_id}" 
-                               class="block py-1 px-2 hover:bg-gray-700 rounded text-sm flex items-center">
-                                <span>{display_name}</span>
-                                {f'<span class="ml-2 px-2 py-0.5 text-xs rounded-full bg-opacity-20" style="background-color: {cls._config["theme"]["primary_color"]}; color: #FFFFFF;">{method}</span>' if method else ''}
-                            </a>
-                        </li>
-                    ''')
-                sidebar_sections.append('</ul></div>')
-            sidebar_sections.append('</div>')
-
-        # Return the complete secondary sidebar HTML
-        return f'''
-            <div class="p-4">
-                <div class="mb-4">
-                    <input
-                        type="text"
-                        placeholder="Search..."
-                        class="w-full px-4 py-2 rounded-lg border border-gray-600 
-                               bg-gray-800 text-white placeholder-gray-400"
-                        style="outline-color: {cls._config['theme']['primary_color']};"
-                    />
-                </div>
-                <div class="secondary-sidebar-content">
-                    {"".join(sidebar_sections)}
-                </div>
-            </div>
-        '''
-
-    @classmethod
-    def _build_endpoints_for_type(cls, doc_type: str) -> str:
-        """Generate the HTML for documented items of a specific type."""
-        return cls._build_endpoints(filter_type=doc_type)
-
-    @classmethod
-    def _get_unique_statuses(cls) -> list:
-        """Collect all unique statuses from the API documentation."""
-        statuses = set()
-        for items in cls._registry.values():
-            for item in items:
-                if status := item.get('status'):
-                    statuses.add(status.strip())
-        return sorted(list(statuses))
-
-    @classmethod
-    def _get_unique_tags(cls) -> list:
-        """Collect all unique tags from the API documentation."""
-        tags = set()
-        for items in cls._registry.values():
-            for item in items:
-                if tag := item.get('tag'):
-                    tags.add(tag.strip())
-        return sorted(list(tags))
-    
-    @classmethod
-    def _get_unique_versions(cls) -> list:
-        """Collect all unique versions from the API documentation."""
-        versions = set()
-        for items in cls._registry.values():
-            for item in items:
-                if version := item.get('version'):
-                    versions.add(version.strip())
-        return sorted(list(versions))
-    
-    @classmethod
-    def _get_relative_logo_path(cls) -> str:
-        """Get the relative path for the logo file."""
-        # Get the logo path from config
-        logo_path = cls._config.get('logo_url', 'templates/assets/img/logo.png')
-        
-        # Convert to relative path
-        if logo_path.startswith(('/', 'C:', 'D:')):
-            # If it's an absolute path, try to make it relative to the project root
-            try:
-                project_root = Path.cwd()
-                logo_path = str(Path(logo_path).relative_to(project_root))
-            except ValueError:
-                # Fallback to default if we can't make it relative
-                logo_path = 'templates/assets/img/logo.png'
-        
-        # Ensure forward slashes for web compatibility
-        return logo_path.replace('\\', '/')
-
-    @classmethod
-    def _get_base64_logo(cls) -> str:
-        """Get the logo as a base64 encoded string."""
-        try:
-            # Get the logo path from config
-            logo_path = cls._config.get('logo_url', 'templates/assets/img/logo.png')
-            
-            # Try different base paths to find the logo
-            possible_paths = [
-                Path.cwd() / logo_path,                # From current working directory
-                Path(__file__).parent / logo_path,     # From module directory
-                Path(__file__).parent.parent / logo_path,  # From project root
-                Path(logo_path)                        # Direct path
-            ]
-            
-            # Try each path until we find the logo
-            for path in possible_paths:
-                if path.exists():
-                    with open(path, 'rb') as image_file:
-                        encoded_string = base64.b64encode(image_file.read()).decode()
-                        # Detect image type from file extension
-                        image_type = path.suffix.lstrip('.').lower()
-                        if image_type not in ['png', 'jpg', 'jpeg', 'gif']:
-                            image_type = 'png'  # Default to PNG
-                        return f"data:image/{image_type};base64,{encoded_string}"
-            
-            print(f"Warning: Logo not found in any of these locations: {[str(p) for p in possible_paths]}")
-            return ""
-            
-        except Exception as e:
-            print(f"Error loading logo: {e}")
-            return ""
-
-    @classmethod
     def get_html(cls) -> str:
-        template = cls._jinja_env.get_template('cacao_template.html')
-        context = {
-            "TITLE": cls._config['title'],
-            "DESCRIPTION": cls._config['description'],
-            "TYPE_NAV": cls._build_type_nav(),
-            "SIDEBAR": cls._build_sidebar(),
-            "SECOND_SIDEBAR": cls._build_secondary_sidebar(),
-            "HOME_CONTENT": cls._build_home_content(),
-            "STATUS_OPTIONS": '\n'.join(
-                ['<option value="all">All Statuses</option>'] +
-                [f'<option value="{s.lower()}">{s}</option>' for s in cls._get_unique_statuses()]
-            ),
-            "TAG_OPTIONS": '\n'.join(
-                ['<option value="all">All Tags</option>'] +
-                [f'<option value="{t.lower()}">{cls.get_tag_display(t)}</option>' for t in cls._get_unique_tags()]
-            ),
-            "VERSION_OPTIONS": '\n'.join(
-                ['<option value="all">All Versions</option>'] +
-                [f'<option value="{v.lower()}">{v}</option>' for v in cls._get_unique_versions()]
-            ),
-            "API_CARD_CONTENT": cls._build_card_view(cls._registry.get('api', [])),
-            "API_TABLE_CONTENT": cls._build_table_view(cls._registry.get('api', [])),
-            "CONTENT_SECTIONS": cls._build_content_sections(),
-            "PRIMARY_COLOR": cls._config['theme']['primary_color'],
-            "LOGO_URL": cls._get_base64_logo(),
-        }
-        return template.render(**context)
-
-    @classmethod
-    def _build_endpoints(cls, filter_type: str = None) -> tuple[str, str]:
-        """Generate both card and table views for documented items."""
-        items = cls._registry.get(filter_type, []) if filter_type else [
-            item for items in cls._registry.values() for item in items
-        ]
+        json_content = cls.get_json()
+        print("JSON content to embed:", json_content)
         
-        # Build card view
-        cards_html = cls._build_card_view(items)
-        # Build table view
-        table_html = cls._build_table_view(items)
+        # Path to the index.html file
+        index_html_path = os.path.join("cacaodocs", "frontend", "build", "index.html")
         
-        return cards_html, table_html
-
-    @classmethod
-    def _build_card_view(cls, items: list) -> str:
-        """Generate the card view HTML for documented items using Jinja template."""
-        template = cls._jinja_env.get_template('components/api_card.html')
-        html = []
+        try:
+            with open(index_html_path, 'r', encoding='utf-8') as file:
+                html_content = file.read()
+            print(f"Successfully read {index_html_path}")
+        except FileNotFoundError:
+            raise FileNotFoundError(f"index.html not found at path: {index_html_path}")
+        except Exception as e:
+            raise Exception(f"An error occurred while reading index.html: {e}")
         
-        for item in items:
-            # Ensure args is always a dictionary
-            args = item.get('args', {})
-            if isinstance(args, str):
-                args = {'args': args}  # Convert string to simple dictionary
-            
-            # Ensure json_body is a dictionary if it's a valid JSON string
-            json_body = item.get('json_body')
-            if isinstance(json_body, str):
+        # Initialize BeautifulSoup for HTML parsing
+        soup = BeautifulSoup(html_content, 'html.parser')
+        
+        # Inline CSS files
+        for link_tag in soup.find_all('link', rel='stylesheet'):
+            href = link_tag.get('href')
+            if href and not href.startswith('http'):  # Skip external links
+                css_path = os.path.join("cacaodocs", "frontend", "build", href.lstrip('/'))
                 try:
-                    json_body = json.loads(json_body)
-                except json.JSONDecodeError:
-                    json_body = {"content": json_body}  # Fallback to a simple dictionary
-            
-            # Prepare context for the template
-            returns_data = item.get('returns', {})
-            if isinstance(returns_data, str):
-                returns_data = {'is_type_ref': False, 'content': returns_data}
-            
-            context = {
-                'anchor_id': f"types-{item['function_name']}".lower().replace(" ", "-"),  # Ensure prefix is 'types-'
-                'method': item.get('method', '').lower(),
-                'status': item.get('status', '').lower(),
-                'endpoint': item.get('endpoint', '').lower(),
-                'version': item.get('version', '').lower(),
-                'tag': item.get('tag', 'general'),
-                'description': item.get('description', ''),
-                'is_api_type': item.get('type', '').lower() == 'api',
-                'has_metadata': any(item.get(key) for key in ['endpoint', 'method', 'last_updated']),
-                'function_name': item['function_name'],
-                'metadata': [
-                    ('Endpoint', item.get('endpoint')),
-                    ('Method', item.get('method')),
-                    ('Last Updated', item.get('last_updated'))
-                ],
-                'args': args,  # Now guaranteed to be a dictionary
-                'json_body': json_body,
-                'returns': returns_data,
-                'raises': item.get('raises'),
-                'registry': cls._registry,
-                'PRIMARY_COLOR': cls._config['theme']['primary_color'],
-                'type_definitions': cls._type_definitions
-            }
-            
-            html.append(template.render(**context))
+                    with open(css_path, 'r', encoding='utf-8') as css_file:
+                        css_content = css_file.read()
+                    # Create a new <style> tag
+                    style_tag = soup.new_tag('style')
+                    style_tag.string = css_content
+                    # Replace the <link> tag with the <style> tag
+                    link_tag.replace_with(style_tag)
+                    print(f"Inlined CSS from {css_path}")
+                except FileNotFoundError:
+                    print(f"CSS file not found: {css_path}. Skipping inlining for this file.")
+                except Exception as e:
+                    print(f"Error inlining CSS file {css_path}: {e}. Skipping inlining for this file.")
         
-        return "\n".join(html)
-
-    @classmethod
-    def _build_table_view(cls, items: list) -> str:
-        """Generate the table view HTML for documented items using Jinja template."""
-        template = cls._jinja_env.get_template('components/api_table.html')
-        return template.render(
-            items=items,
-            PRIMARY_COLOR=cls._config['theme']['primary_color']
-        )
+        # Inline JavaScript files
+        for script_tag in soup.find_all('script', src=True):
+            src = script_tag.get('src')
+            if src and not src.startswith('http'):  # Skip external scripts
+                js_path = os.path.join("cacaodocs", "frontend", "build", src.lstrip('/'))
+                try:
+                    with open(js_path, 'r', encoding='utf-8') as js_file:
+                        js_content = js_file.read()
+                    # Create a new <script> tag without the src attribute
+                    new_script_tag = soup.new_tag('script')
+                    new_script_tag.string = js_content
+                    # Replace the old <script> tag with the new one
+                    script_tag.replace_with(new_script_tag)
+                    print(f"Inlined JavaScript from {js_path}")
+                except FileNotFoundError:
+                    print(f"JavaScript file not found: {js_path}. Skipping inlining for this file.")
+                except Exception as e:
+                    print(f"Error inlining JavaScript file {js_path}: {e}. Skipping inlining for this file.")
+        
+        # Find the existing script tag that defines window.globalData
+        script_tags = soup.find_all('script')
+        global_data_script_found = False
+        for script in script_tags:
+            if script.string and 'window.globalData' in script.string:
+                print("Found existing window.globalData script tag. Updating it.")
+                # Serialize the JSON content to a JavaScript object string
+                json_js = json.dumps(json_content, ensure_ascii=False, indent=4)
+                # Update the script content
+                script.string = f"window.globalData = {json_js};"
+                global_data_script_found = True
+                break
+        
+        if not global_data_script_found:
+            print("No existing window.globalData script tag found. Creating a new one.")
+            # Serialize the JSON content to a JavaScript object string
+            json_js = json.dumps(json_content, ensure_ascii=False, indent=4)
+            new_script_tag = soup.new_tag('script')
+            new_script_tag.string = f"window.globalData = {json_js};"
+            # Insert the new script tag before the closing </body> tag
+            if soup.body:
+                soup.body.append(new_script_tag)
+                print("Appended new window.globalData script tag to <body>.")
+            else:
+                # If <body> is not found, append the script at the end of the HTML
+                soup.append(new_script_tag)
+                print("Appended new window.globalData script tag to the end of the HTML.")
+        
+        # Convert the modified soup back to a string
+        updated_html = str(soup)
+        print("HTML content successfully updated.")
+        
+        return updated_html

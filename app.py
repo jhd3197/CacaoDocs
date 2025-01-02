@@ -4,7 +4,6 @@ from cacaodocs import CacaoDocs
 
 CacaoDocs.load_config()
 
-
 from flask import Flask, request, jsonify, render_template
 from flask.json import JSONEncoder
 from models.database import MockDatabase
@@ -30,7 +29,6 @@ db = MockDatabase()
 @CacaoDocs.doc_api(doc_type="api", tag="users")
 def create_user():
     """
-    Endpoint: /api/users
     Method:   POST
     Version:  v1
     Status:   Production
@@ -39,37 +37,13 @@ def create_user():
     Description:
         Creates a new user with the provided details.
 
-    Args:
-        None
-
-    JSON Body:
-        {
-            "username": "johndoe",
-            "email": "john@example.com",
-            "first_name": "John",
-            "last_name": "Doe",
-            "addresses": [
-                {
-                    "street": "123 Main St",
-                    "city": {
-                        "name": "Boston",
-                        "state": "Massachusetts",
-                        "country_code": "US",
-                        "latitude": 42.3601,
-                        "longitude": -71.0589
-                    },
-                    "country": {
-                        "code": "US",
-                        "name": "United States",
-                        "phone_code": "+1"
-                    },
-                    "postal_code": "02101"
-                }
-            ]
-        }
-
-    Returns:
-        @type{User}: The created user record with full address details.
+    Responses:
+        201:
+            description: "User successfully created."
+            example:{"id": 12345,"username": "johndoe"}
+        400:
+            description: "Bad request due to invalid input."
+            example:{"error": "Invalid email format."}
     """
     data = request.json or {}
     try:
@@ -82,7 +56,7 @@ def create_user():
 @CacaoDocs.doc_api(doc_type="api", tag="users")
 def get_user(user_id):
     """
-    Endpoint: /api/users/<user_id>
+    Endpoint: /api/users_custom/<user_id>
     Method:   GET
     Version:  v1
     Status:   Production
@@ -94,11 +68,12 @@ def get_user(user_id):
     Args:
         user_id (int): The unique identifier of the user.
 
-    Returns:
-        @type{User}: The complete user record with all associated data.
-
     Raises:
         UserNotFoundError: If no user is found with the given `user_id`.
+
+    Responses:
+        Data:
+            example:@type{User}
     """
     if user := db.get_user(user_id):
         return user  # Now Flask will use our custom JSON encoder
@@ -120,16 +95,15 @@ def update_user_email(user_id):
     Args:
         user_id (int): The unique identifier of the user.
 
-    JSON Body:
-        {
-            "email": "newemail@example.com"
-        }
-
-    Returns:
-        @type{User}: The updated user record.
-
     Raises:
         UserNotFoundError: If no user is found with the given `user_id`.
+
+    Responses:
+        Data:
+            example: "{"id": 12345,"username": "johndoe"}"
+        200:
+            description: "User email updated successfully."
+            example:{"id": 12345,"username": "johndoe"}
     """
     try:
         user = db.update_user_email(user_id, request.json.get("email"))
@@ -153,11 +127,12 @@ def delete_user(user_id):
     Args:
         user_id (int): The unique identifier of the user.
 
-    Returns:
-        @type{dict}: A message confirming deletion.
-
     Raises:
         UserNotFoundError: If no user is found with the given `user_id`.
+
+    Responses:
+        200:
+            example: {"message": "User 12345 deleted successfully."}
     """
     try:
         db.delete_user(user_id)
@@ -178,11 +153,13 @@ def list_users():
     Description:
         Retrieves a list of all users in the system.
 
-    Args:
-        None
-
-    Returns:
-        @type{list[User]}: A list of user records.
+    Responses:
+        200:
+            description: "List of users retrieved successfully."
+            example: [{"id": 12345,"username": "johndoe"}]
+        304:
+            description: "No users found in the system."
+            example: {"message": "No users found."}
     """
     users = [user.to_dict() for user in db.list_users()]
     return jsonify(users), 200
@@ -198,22 +175,16 @@ def get_documentation():
 
     Description:
         Returns a JSON object containing metadata for all documented endpoints.
-
-    Args:
-        None
-
-    Returns:
-        @type{dict}: The documentation registry.
     """
     documentation = CacaoDocs.get_json()
     response = jsonify(documentation)
     response.headers.add('Access-Control-Allow-Origin', '*')  # Enable CORS
     return response, 200
 
-@app.route('/docs/html', methods=['GET'])
+@app.route('/', methods=['GET'])
 def get_documentation_html():
     """
-    Endpoint: /docs/html
+    Endpoint: /
     Method:   GET
     Version:  v1
     Status:   Production
@@ -222,14 +193,64 @@ def get_documentation_html():
     Description:
         Returns an HTML page containing the API documentation.
 
-    Args:
-        None
-
     Returns:
-        @type{str}: HTML documentation string
+        200:
+            description: "HTML documentation retrieved successfully."
+            example: "<html><body>API Documentation</body></html>"
     """
     html_documentation = CacaoDocs.get_html()
     return html_documentation, 200, {'Content-Type': 'text/html'}
+
+@app.route('/docs-one', methods=['GET'])
+def get_documentation_one():
+    """
+    Endpoint: /docs-one
+    Method:   GET
+    Version:  v1
+    Status:   Production
+    Last Updated: 2024-04-27
+
+    Description:
+        Returns a JSON object containing one configuration from each category.
+    """
+    documentation_one = CacaoDocs.get_one_of_each()
+    response = jsonify(documentation_one)
+    response.headers.add('Access-Control-Allow-Origin', '*')  # Enable CORS
+    return response, 200
+
+@app.route('/docs-two', methods=['GET'])
+def get_documentation_two():
+    """
+    Endpoint: /docs-two
+    Method:   GET
+    Version:  v1
+    Status:   Production
+    Last Updated: 2024-04-27
+
+    Description:
+        Returns a JSON object containing two configurations from each category.
+    """
+    documentation_two = CacaoDocs.get_two_of_each()
+    response = jsonify(documentation_two)
+    response.headers.add('Access-Control-Allow-Origin', '*')  # Enable CORS
+    return response, 200
+
+@app.route('/docs-four', methods=['GET'])
+def get_documentation_four():
+    """
+    Endpoint: /docs-four
+    Method:   GET
+    Version:  v1
+    Status:   Production
+    Last Updated: 2024-04-27
+
+    Description:
+        Returns a JSON object containing four configurations from each category.
+    """
+    documentation_four = CacaoDocs.get_four_of_each()
+    response = jsonify(documentation_four)
+    response.headers.add('Access-Control-Allow-Origin', '*')  # Enable CORS
+    return response, 200
 
 @app.route('/home')
 def home():

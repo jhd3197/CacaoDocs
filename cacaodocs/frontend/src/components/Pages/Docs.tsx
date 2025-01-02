@@ -19,9 +19,8 @@ import {
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json';
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
-import localData from '../../data/localData.json';
-import './Docs.css';
-import DocCard from './DocCard'; // Added import
+import DocCard from '../Cards/DocCard'; // The updated DocCard
+import type { TypeItem } from '../../global'; // Update import to use TypeItem
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -50,10 +49,16 @@ interface DocItem {
   version?: string;
   function_source?: string;
   inputs?: string[];
-  outputs?: string | null;    // Updated to accept null
+  outputs?: string | null;
 }
 
-const Docs: React.FC = () => {
+// ---------------------- NEW: Accept the `types` array here ---------------------- //
+interface DocsProps {
+  data: DocItem[];
+  types: TypeItem[]; // Change TypeDefinition to TypeItem
+}
+
+const Docs: React.FC<DocsProps> = ({ data, types }) => {
   const [docsData, setDocsData] = useState<DocItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -68,10 +73,9 @@ const Docs: React.FC = () => {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   useEffect(() => {
-    // Load docs from localData
-    setDocsData(localData.docs || []);
+    setDocsData(data);
     setLoading(false);
-  }, []);
+  }, [data]);
 
   // (Optional) Scroll or highlight functionality
   const handleSelectDoc = (functionName: string) => {
@@ -179,7 +183,7 @@ const Docs: React.FC = () => {
       return <Spin />;
     }
     return (
-      <div style={{ width: '100%'  }}>
+      <div style={{ width: '100%' }}>
         {/* Filters */}
         <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
@@ -229,7 +233,11 @@ const Docs: React.FC = () => {
           <div>
             {filteredData.map(doc => (
               <div id={`doc-${doc.function_name}`} key={doc.function_name}>
-                <DocCard doc={doc} />
+                {/*
+                  Pass `types` into DocCard just like we do with ApiCard,
+                  so it can do the sub-type tooltip logic:
+                */}
+                <DocCard doc={doc} types={types} />
               </div>
             ))}
           </div>
@@ -247,11 +255,7 @@ const Docs: React.FC = () => {
 
   return (
     <Layout style={{ minHeight: '100vh' }}>
-      <Content
-        style={{
-          padding: '24px'
-        }}
-      >
+      <Content style={{ padding: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
           <Space>
             <AppstoreOutlined style={{ opacity: viewMode === 'card' ? 1 : 0.5 }} />

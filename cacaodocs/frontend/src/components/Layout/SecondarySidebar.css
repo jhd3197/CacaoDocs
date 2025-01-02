@@ -71,6 +71,20 @@
   color: var(--text-color) !important;
 }
 
+.search-input {
+    width: 100%;
+}
+
+.search-input:focus,
+.search-input:focus-within {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(101, 67, 33, 0.2);
+}
+
+.search-input input {
+    background-color: transparent !important;
+}
+
 .search-input input::placeholder {
     color: #BFA094 !important;
 }
