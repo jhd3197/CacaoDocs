@@ -1,18 +1,16 @@
 # app.py
 
+from flask import Flask, request, jsonify, render_template, json
+from models.database import MockDatabase
+
 from cacaodocs import CacaoDocs
 
 CacaoDocs.load_config()
 
-from flask import Flask, request, jsonify, render_template
-from flask.json import JSONEncoder
-from models.database import MockDatabase
-
-
 import pkg_test
 
 
-class CustomJSONEncoder(JSONEncoder):
+class CustomJSONEncoder(json.JSONEncoder):
     """Custom JSON encoder for Flask."""
     def default(self, obj):
         if hasattr(obj, '__json__'):

@@ -1,9 +1,9 @@
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from typing import Optional, List
-from cacaodocs import CacaoDocs
-from flask.json import JSONEncoder
+from flask import json
 from .locations import City, Country
+from cacaodocs import CacaoDocs
 
 @dataclass
 @CacaoDocs.doc_api(doc_type="types", tag="locations")

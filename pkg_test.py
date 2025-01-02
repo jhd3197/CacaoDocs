@@ -49,11 +49,11 @@ class UserManager:
         Args:
             user_id (int): The unique identifier of the user.
 
-        Returns:
-            @type{dict}: A dictionary containing the user's ID, username, and email.
-
         Raises:
             KeyError: If the user with the specified ID does not exist.
+
+        Returns:
+            @type{dict}: A dictionary containing the user's ID, username, and email.
         """
         try:
             return self.users[user_id]
