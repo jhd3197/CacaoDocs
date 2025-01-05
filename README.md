@@ -18,6 +18,9 @@ CacaoDocs is still under development. It doesn't feature many customization opti
 - **Search Functionality**: Easily find what you need within your documentation with built-in search. 🔍📑
 - **Link Generation**: Automatically create links between different parts of your documentation for easy navigation. 🔗🗺️
 - **Code Snippet Copying**: Easily copy code examples from your documentation with a single click. 📋💻
+- **API Status Tracking**: Display the current status of each API endpoint, indicating whether it's under development or in production. 🛠️🔄
+- **ER Diagram for the Types Page**: Visual representation of the data models and their relationships within the Types documentation. 📊📚
+- **Recent Changes View Based on "Last Updated"**: Easily view the latest updates and modifications to your documentation based on the "Last Updated" timestamps. 🕒🔍
 
 ## 🚀 Upcoming Features
 - **AI-Powered Documentation**: Leverage OpenAI to generate custom, intelligent documentation tailored to your codebase. 🤖📝✨
@@ -27,7 +30,7 @@ CacaoDocs is still under development. It doesn't feature many customization opti
 
 Join the CacaoDocs community and contribute to making documentation generation easier and more beautiful for everyone! 🌍❤️
 
-![cacaodocs](https://github.com/user-attachments/assets/b2c64a0a-925a-4611-9d27-2976a42e94e9)
+![cacaoDocsV2](https://github.com/user-attachments/assets/b0a6709f-c5d5-4aab-85a2-13ed540ba7ec)
 
 ## Installation
 
@@ -262,6 +265,87 @@ class Address:
         )
 ```
 
+### 4. API Status Tracking
+
+CacaoDocs now includes **API Status Tracking**, allowing you to indicate whether each endpoint is under development or in production. This helps in maintaining clarity about the stability and readiness of different parts of your API.
+
+**Example:**
+
+```python
+@CacaoDocs.doc_api(doc_type="api", tag="users")
+def delete_user(user_id: int):
+    """
+    Endpoint: /api/users/<user_id>
+    Method:   DELETE
+    Version:  v1
+    Status:   Under Development
+    Last Updated: 2024-05-10
+
+    Description:
+        Deletes a user by their unique ID.
+
+    Args:
+        user_id (int): The unique identifier of the user to delete.
+
+    Responses:
+        200:
+            description: "User successfully deleted."
+        404:
+            description: "User not found."
+    """
+    # Implementation goes here
+    pass
+```
+
+### 5. ER Diagram for the Types Page
+
+To provide a clear understanding of the relationships between different data models, CacaoDocs now supports embedding an **ER Diagram** within the Types documentation.
+
+**Example:**
+
+![ER_Diagram](https://github.com/user-attachments/assets/d78a4406-9063-464b-8903-da7160017af5)
+
+*Figure 1: ER Diagram for the Types Page*
+
+### 6. Recent Changes View Based on "Last Updated"
+
+CacaoDocs introduces a **Recent Changes View** that allows you to track the latest modifications to your documentation based on the "Last Updated" timestamps.
+
+**Example:**
+
+```json
+{
+    "endpoints": [
+        {
+            "path": "/api/users",
+            "method": "POST",
+            "last_updated": "2024-04-25",
+            "status": "Production"
+        },
+        {
+            "path": "/api/users/<int:user_id>",
+            "method": "GET",
+            "last_updated": "2024-04-25",
+            "status": "Production"
+        },
+        {
+            "path": "/api/users/<user_id>",
+            "method": "DELETE",
+            "last_updated": "2024-05-10",
+            "status": "Under Development"
+        }
+    ],
+    "types": [
+        {
+            "name": "Address",
+            "last_updated": "2024-03-15"
+        }
+    ]
+}
+```
+
+This JSON structure allows developers to quickly identify the most recently updated parts of the documentation, ensuring they stay informed about the latest changes.
+
 ## Contributing
 
 CacaoDocs is a work in progress, and any contributions are welcome. Whether it’s:
@@ -274,3 +358,18 @@ Feel free to open an issue or create a PR in this repository.
 ---
 
 **Happy documenting!**
+
+---
+
+# Screenshots
+<img width="695" alt="image" src="https://github.com/user-attachments/assets/5dcac8db-8fe6-44d6-b683-b4afc37a59e2" />
+
+*Figure 2: API Status Tracking*
+
+<img width="809" alt="image" src="https://github.com/user-attachments/assets/fb946c05-48c3-4466-8578-5e266bc111ba" />
+
+*Figure 3: Recent Changes View Based on "Last Updated"*
+
+---
+
+Feel free to customize the image URLs and additional sections as needed to fit your project's structure and resources.
