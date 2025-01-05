@@ -11,7 +11,15 @@ import logo from '../../assets/img/logo.png';
 
 const { Title } = Typography;
 
-const MainSidebar: React.FC = () => {
+interface MainSidebarProps {
+    apiData: {
+        api: any[];
+        docs: any[];
+        types: any[];
+    };
+}
+
+const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
     const location = useLocation();
 
     return (
@@ -40,15 +48,21 @@ const MainSidebar: React.FC = () => {
                 <Menu.Item key="/" icon={<HomeOutlined />}>
                     <Link to="/">Home</Link>
                 </Menu.Item>
-                <Menu.Item key="/api" icon={<ApiOutlined />}>
-                    <Link to="/api">API</Link>
-                </Menu.Item>
-                <Menu.Item key="/types" icon={<BlockOutlined />}>
-                    <Link to="/types">Types</Link>
-                </Menu.Item>
-                <Menu.Item key="/docs" icon={<FileTextOutlined />}>
-                    <Link to="/docs">Docs</Link>
-                </Menu.Item>
+                {apiData.api.length > 0 && (
+                    <Menu.Item key="/api" icon={<ApiOutlined />}>
+                        <Link to="/api">API</Link>
+                    </Menu.Item>
+                )}
+                {apiData.types.length > 0 && (
+                    <Menu.Item key="/types" icon={<BlockOutlined />}>
+                        <Link to="/types">Types</Link>
+                    </Menu.Item>
+                )}
+                {apiData.docs.length > 0 && (
+                    <Menu.Item key="/docs" icon={<FileTextOutlined />}>
+                        <Link to="/docs">Docs</Link>
+                    </Menu.Item>
+                )}
             </Menu>
         </div>
     );

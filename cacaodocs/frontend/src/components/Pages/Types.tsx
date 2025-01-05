@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Spin, Tag, Layout, Switch, Space, Input, Select } from 'antd';
+import { Table, Spin, Tag, Layout, Switch, Space, Input, Select, Button } from 'antd';
 import { TableOutlined, AppstoreOutlined } from '@ant-design/icons';
 import TypeCard from './TypeCard';
+import ERDiagramView from './ERDiagramView';
 import { TypeItem } from '../../global';
 
 const { Content } = Layout;
 const { Search } = Input;
 
-interface TypeArgument {
+export interface TypeArgument {
   bg_color: string;
   color: string;
   description: string;
@@ -15,7 +16,7 @@ interface TypeArgument {
   type: string;
 }
 
-interface TypeDefinition {
+export interface TypeDefinition {
   args: Record<string, TypeArgument>;
   description: string;
   function_name: string;
@@ -29,7 +30,7 @@ interface TypesProps {
 
 const Types: React.FC<TypesProps> = ({ data }) => {
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+  const [viewMode, setViewMode] = useState<'card' | 'table' | 'er'>('card');
   const [searchText, setSearchText] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [typesData, setTypesData] = useState<TypeDefinition[]>([]);
@@ -118,6 +119,9 @@ const Types: React.FC<TypesProps> = ({ data }) => {
     if (loading) {
       return <Spin />;
     }
+    if (viewMode === 'er') {
+      return <ERDiagramView typesData={typesData} />;
+    }
 
     return (
       <div style={{ width: '100%' }}>
@@ -180,6 +184,10 @@ const Types: React.FC<TypesProps> = ({ data }) => {
               onChange={(checked) => setViewMode(checked ? 'table' : 'card')}
             />
             <TableOutlined style={{ opacity: viewMode === 'table' ? 1 : 0.5 }} />
+            {/* Add a button or toggle for ER mode */}
+            <Button onClick={() => setViewMode(viewMode === 'er' ? 'card' : 'er')}>
+              Toggle ER Diagram
+            </Button>
           </Space>
         </div>
         {renderContent()}

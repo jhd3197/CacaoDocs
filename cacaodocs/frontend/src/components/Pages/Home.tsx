@@ -1,178 +1,349 @@
 import React from 'react';
-import { Typography, Layout, Row, Col, Card, Button, Space, theme } from 'antd';
-import { Link } from 'react-router-dom';
-import { 
-  RocketOutlined, 
-  FileSearchOutlined, 
+import {
+  Typography,
+  Layout,
+  Row,
+  Col,
+  Card,
+  Statistic,
+  List,
+  Space,
+  Button,
+  theme
+} from 'antd';
+import {
+  FileTextOutlined,
   ApiOutlined,
   CodeOutlined,
-  RightOutlined
+  ClockCircleOutlined,
+  ArrowRightOutlined
 } from '@ant-design/icons';
+import { Link } from 'react-router-dom';
 
-const { Title, Paragraph } = Typography;
+const { Title, Text } = Typography;
 const { Content } = Layout;
 const { useToken } = theme;
 
-const Home: React.FC = () => {
+interface HomeProps {
+  data: {
+    api: any[];
+    docs: any[];
+    types: any[];
+  };
+}
+
+const DashboardHome: React.FC<HomeProps> = ({ data }) => {
   const { token } = useToken();
 
-  // Custom colors for the gradient
-  const greenColor = '#2E7D32'; // Forest green
-  const brownColor = '#795548'; // Rich brown
+  const getRelativeTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+    return `${Math.floor(diffDays / 365)} years ago`;
+  };
+
+  const getActivityTitle = (item: any) => {
+    switch (item.itemType) {
+      case 'api':
+        return `API Endpoint Updated ${item.method || ''} ${item.endpoint || item.function_name}`;
+      case 'type':
+        return `Type Definition Modified ${item.function_name}${item.args ? ` with ${Object.keys(item.args).length} parameters` : ''}`;
+      case 'doc':
+        return `Documentation Updated ${item.function_name}()`;
+      default:
+        return item.function_name || 'Untitled';
+    }
+  };
+
+  const recentActivity = [
+    ...data.api.map(item => ({ ...item, itemType: 'api' })),
+    ...data.docs.map(item => ({ ...item, itemType: 'doc' })),
+    ...data.types.map(item => ({ ...item, itemType: 'type' }))
+  ]
+  .filter(item => item.last_updated)
+  .sort((a, b) => {
+    return new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime();
+  })
+  .slice(0, 3);
+
+  const getIconForType = (type: string) => {
+    switch (type) {
+      case 'api':
+        return <ApiOutlined style={{ color: token.colorPrimary }} />;
+      case 'type':
+        return <CodeOutlined style={{ color: token.colorPrimary }} />;
+      case 'doc':
+        return <FileTextOutlined style={{ color: token.colorPrimary }} />;
+      default:
+        return <ApiOutlined style={{ color: token.colorPrimary }} />;
+    }
+  };
 
   return (
-    <Layout>
-      <Content>
-        {/* Hero Section */}
-        <Row 
-          justify="center" 
-          align="middle" 
-          style={{ 
-            minHeight: '80vh',
-            background: `linear-gradient(145deg, ${token.colorBgContainer} 0%, ${token.colorBgLayout} 100%)`,
-            padding: '0 24px'
-          }}
-        >
-          <Col xs={24} md={20} lg={16} style={{ textAlign: 'center' }}>
-            <Space direction="vertical" size="large" style={{ width: '100%' }}>
-              <Title style={{ 
-                fontSize: '4rem', 
-                marginBottom: 0,
-                background: `linear-gradient(90deg, ${greenColor} 0%, ${brownColor} 100%)`,
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent'
+    <Layout style={{ 
+      minHeight: '100vh',
+      background: 'linear-gradient(145deg, #f6f8fc 0%, #ffffff 100%)'
+    }}>
+      <Content style={{ padding: '32px' }}>
+        <Row gutter={[32, 32]}>
+          {/* Welcome Section */}
+          <Col span={24}>
+            <Card
+              style={{
+                borderRadius: '16px',
+                background: 'linear-gradient(145deg, #471b00 0%, #2b1100 100%)',
+                border: 'none',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+              }}
+            >
+              <Title level={4} style={{ 
+                margin: 0,
+                color: '#ffffff',
+                fontSize: '2rem',
+                fontWeight: 600
               }}>
-                Welcome to CacaoDocs
+                Welcome to CacaoDocs Dashboard
               </Title>
-              <Paragraph style={{ 
-                fontSize: '1.5rem',
-                color: token.colorTextSecondary,
-                margin: '24px 0 40px'
+              <Text style={{ 
+                color: 'rgba(255, 255, 255, 0.85)',
+                fontSize: '1.1rem',
+                display: 'block',
+                marginTop: '8px'
               }}>
-                Your comprehensive documentation platform for better development
-              </Paragraph>
-              <Space size="large" wrap style={{ justifyContent: 'center' }}>
-                <Link to="/docs">
-                  <Button 
-                    type="primary" 
-                    size="large" 
-                    icon={<RocketOutlined />}
-                    style={{ 
-                      height: '48px',
-                      padding: '0 32px',
-                      fontSize: '16px'
-                    }}
-                  >
-                    Get Started
-                  </Button>
-                </Link>
-                <Link to="/docs">
-                  <Button 
-                    size="large" 
-                    icon={<FileSearchOutlined />}
-                    style={{ 
-                      height: '48px',
-                      padding: '0 32px',
-                      fontSize: '16px'
-                    }}
-                  >
-                    Browse Docs
-                  </Button>
-                </Link>
-              </Space>
-            </Space>
+                Manage and explore your documentation with ease
+              </Text>
+            </Card>
           </Col>
-        </Row>
 
-        {/* Features Section */}
-        <Row 
-          style={{ 
-            padding: '64px 24px',
-            background: token.colorBgContainer
-          }}
-        >
-          <Col span={24} style={{ maxWidth: 1200, margin: '0 auto' }}>
-            <Row gutter={[32, 32]}>
-              {/* API Card */}
-              <Col xs={24} md={8}>
-                <Link to="/api" style={{ display: 'block', height: '100%' }}>
-                  <Card
-                    hoverable
-                    style={{ height: '100%' }}
-                    bodyStyle={{ height: '100%' }}
-                  >
-                    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                      <ApiOutlined style={{ fontSize: '32px', color: greenColor }} />
-                      <Title level={3}>Explore API</Title>
-                      <Paragraph style={{ fontSize: '16px', marginBottom: '24px' }}>
-                        Dive into our endpoints and discover powerful integrations.
-                      </Paragraph>
-                      <Button 
-                        type="link" 
-                        style={{ padding: 0 }}
-                      >
-                        Go to API <RightOutlined />
-                      </Button>
-                    </Space>
-                  </Card>
-                </Link>
-              </Col>
+          {/* Action Cards */}
+          {data.api.length > 0 && (
+            <Col xs={24} md={8}>
+              <Link to="/api" style={{ display: 'block' }}>
+                <Card
+                  hoverable
+                  style={{
+                    height: '100%',
+                    borderRadius: '16px',
+                    transition: 'all 0.3s ease',
+                    border: '1px solid #f0f0f0',
+                    overflow: 'hidden'
+                  }}
+                  bodyStyle={{
+                    padding: '32px 24px',
+                  }}
+                >
+                  <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{
+                        background: `${token.colorPrimary}15`,
+                        borderRadius: '50%',
+                        width: '80px',
+                        height: '80px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 20px'
+                      }}>
+                        <ApiOutlined style={{ fontSize: '40px', color: token.colorPrimary }} />
+                      </div>
+                      <Title level={3} style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>API Documentation</Title>
+                      <Statistic
+                        value={data.api.length}
+                        suffix="Endpoints"
+                        valueStyle={{ color: token.colorPrimary, fontSize: '2rem' }}
+                      />
+                    </div>
+                    <Button 
+                      type="text"
+                      style={{
+                        color: token.colorPrimary,
+                        padding: 0,
+                        height: 'auto',
+                        fontSize: '1rem'
+                      }}
+                    >
+                      Explore APIs <ArrowRightOutlined />
+                    </Button>
+                  </Space>
+                </Card>
+              </Link>
+            </Col>
+          )}
 
-              {/* Types Card */}
-              <Col xs={24} md={8}>
-                <Link to="/types" style={{ display: 'block', height: '100%' }}>
-                  <Card
-                    hoverable
-                    style={{ height: '100%' }}
-                    bodyStyle={{ height: '100%' }}
-                  >
-                    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                      <CodeOutlined style={{ fontSize: '32px', color: greenColor }} />
-                      <Title level={3}>Review Types</Title>
-                      <Paragraph style={{ fontSize: '16px', marginBottom: '24px' }}>
-                        Check out type definitions for stable, consistent development.
-                      </Paragraph>
-                      <Button 
-                        type="link" 
-                        style={{ padding: 0 }}
-                      >
-                        View Types <RightOutlined />
-                      </Button>
-                    </Space>
-                  </Card>
-                </Link>
-              </Col>
+          {data.types.length > 0 && (
+            <Col xs={24} md={8}>
+              <Link to="/types" style={{ display: 'block' }}>
+                <Card
+                  hoverable
+                  style={{
+                    height: '100%',
+                    borderRadius: '16px',
+                    transition: 'all 0.3s ease',
+                    border: '1px solid #f0f0f0',
+                    overflow: 'hidden'
+                  }}
+                  bodyStyle={{
+                    padding: '32px 24px',
+                  }}
+                >
+                  <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{
+                        background: `${token.colorPrimary}15`,
+                        borderRadius: '50%',
+                        width: '80px',
+                        height: '80px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 20px'
+                      }}>
+                        <CodeOutlined style={{ fontSize: '40px', color: token.colorPrimary }} />
+                      </div>
+                      <Title level={3} style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>Type Definitions</Title>
+                      <Statistic
+                        value={data.types.length}
+                        suffix="Types"
+                        valueStyle={{ color: token.colorPrimary, fontSize: '2rem' }}
+                      />
+                    </div>
+                    <Button 
+                      type="text"
+                      style={{
+                        color: token.colorPrimary,
+                        padding: 0,
+                        height: 'auto',
+                        fontSize: '1rem'
+                      }}
+                    >
+                      View Types <ArrowRightOutlined />
+                    </Button>
+                  </Space>
+                </Card>
+              </Link>
+            </Col>
+          )}
 
-              {/* Docs Card */}
-              <Col xs={24} md={8}>
-                <Link to="/docs" style={{ display: 'block', height: '100%' }}>
-                  <Card
-                    hoverable
-                    style={{ height: '100%' }}
-                    bodyStyle={{ height: '100%' }}
-                  >
-                    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                      <FileSearchOutlined style={{ fontSize: '32px', color: greenColor }} />
-                      <Title level={3}>Read Docs</Title>
-                      <Paragraph style={{ fontSize: '16px', marginBottom: '24px' }}>
-                        Find guides, best practices, and in-depth examples.
-                      </Paragraph>
-                      <Button 
-                        type="link" 
-                        style={{ padding: 0 }}
-                      >
-                        Open Docs <RightOutlined />
-                      </Button>
-                    </Space>
-                  </Card>
-                </Link>
-              </Col>
-            </Row>
-          </Col>
+          {data.docs.length > 0 && (
+            <Col xs={24} md={8}>
+              <Link to="/docs" style={{ display: 'block' }}>
+                <Card
+                  hoverable
+                  style={{
+                    height: '100%',
+                    borderRadius: '16px',
+                    transition: 'all 0.3s ease',
+                    border: '1px solid #f0f0f0',
+                    overflow: 'hidden'
+                  }}
+                  bodyStyle={{
+                    padding: '32px 24px',
+                  }}
+                >
+                  <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{
+                        background: `${token.colorPrimary}15`,
+                        borderRadius: '50%',
+                        width: '80px',
+                        height: '80px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        margin: '0 auto 20px'
+                      }}>
+                        <FileTextOutlined style={{ fontSize: '40px', color: token.colorPrimary }} />
+                      </div>
+                      <Title level={3} style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>Documentation</Title>
+                      <Statistic
+                        value={data.docs.length}
+                        suffix="Pages"
+                        valueStyle={{ color: token.colorPrimary, fontSize: '2rem' }}
+                      />
+                    </div>
+                    <Button 
+                      type="text"
+                      style={{
+                        color: token.colorPrimary,
+                        padding: 0,
+                        height: 'auto',
+                        fontSize: '1rem'
+                      }}
+                    >
+                      Browse Docs <ArrowRightOutlined />
+                    </Button>
+                  </Space>
+                </Card>
+              </Link>
+            </Col>
+          )}
+
+          {/* Recent Activity Section */}
+          {recentActivity.length > 0 && (
+            <Col span={24}>
+              <Card
+                style={{
+                  borderRadius: '16px',
+                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+                }}
+                bodyStyle={{
+                  padding: '0px 24px'
+                }}
+                title={
+                  <Space size="middle">
+                    <ClockCircleOutlined style={{ fontSize: '20px' }} />
+                    <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>Recent Activity</span>
+                  </Space>
+                }
+              >
+                <List
+                  itemLayout="horizontal"
+                  dataSource={recentActivity}
+                  renderItem={item => (
+                    <List.Item style={{ padding: '16px 0' }}>
+                      <List.Item.Meta
+                        avatar={
+                          <div style={{
+                            background: `${token.colorBgContainer}`,
+                            borderRadius: '8px',
+                            padding: '8px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
+                          }}>
+                            {getIconForType(item.itemType)}
+                          </div>
+                        }
+                        title={
+                          <Text strong>
+                            {getActivityTitle(item)}
+                          </Text>
+                        }
+                        description={
+                          <Space direction="vertical" size={0}>
+                            <Text type="secondary">
+                              {getRelativeTime(item.last_updated)}
+                            </Text>
+                          </Space>
+                        }
+                      />
+                    </List.Item>
+                  )}
+                />
+              </Card>
+            </Col>
+          )}
         </Row>
       </Content>
     </Layout>
   );
 };
 
-export default Home;
+export default DashboardHome;

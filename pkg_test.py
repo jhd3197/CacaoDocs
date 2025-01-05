@@ -1,4 +1,3 @@
-
 from cacaodocs import CacaoDocs
 import math
 
@@ -16,6 +15,7 @@ class UserManager:
         Method: create_user
         Version: v1
         Status: Production
+        Last Updated: 2024-02-12
 
         Description:
             Creates a new user with a unique ID, username, and email.
@@ -42,6 +42,7 @@ class UserManager:
         Method: get_user
         Version: v1
         Status: Production
+        Last Updated: 2025-01-01
 
         Description:
             Retrieves the details of a user by their unique ID.
@@ -66,6 +67,7 @@ class UserManager:
         Method: update_user
         Version: v1
         Status: Production
+        Last Updated: 2024-10-01
 
         Description:
             Updates the username and/or email of an existing user.
@@ -101,6 +103,7 @@ class UserManager:
         Method: delete_user
         Version: v1
         Status: Production
+        Last Updated: 2024-10-12
 
         Description:
             Deletes a user from the database by their unique ID.
@@ -126,6 +129,7 @@ class UserManager:
         Method: list_users
         Version: v1
         Status: Production
+        Last Updated: 2024-10-14
 
         Description:
             Retrieves a list of all users in the database.
@@ -142,6 +146,7 @@ class Calculator:
         Method: add
         Version: v1
         Status: Production
+        Last Updated: 2024-11-12
         
         Description:
             Adds two numbers together.
@@ -161,6 +166,7 @@ class Calculator:
         Method: subtract
         Version: v1
         Status: Production
+        Last Updated: 2024-11-11
         
         Description:
             Subtracts second number from first number.
@@ -180,6 +186,7 @@ class Calculator:
         Method: multiply
         Version: v1
         Status: Production
+        Last Updated: 2024-02-12
         
         Description:
             multiply two numbers together.
@@ -194,6 +201,25 @@ class Calculator:
         return a * b
 
     def divide(self, a, b):
+        """
+        Method: divide
+        Version: v1
+        Status: Production
+        Last Updated: 2024-02-12
+        
+        Description:
+            Divides first number by second number.
+            
+        Args:
+            a (float): First number
+            b (float): Second number
+            
+        Returns:
+            float: The result of a divided by b
+            
+        Raises:
+            ValueError: If attempting to divide by zero
+        """
         if b != 0:
             return a / b
         else:
@@ -222,6 +248,7 @@ class ScientificCalculator:
         Method: power
         Version: v1
         Status: Production
+        Last Updated: 2024-02-12
         
         Description:
             Raises a base number to the power of an exponent.
@@ -241,6 +268,7 @@ class ScientificCalculator:
         Method: sqrt
         Version: v1
         Status: Production
+        Last Updated: 2024-02-12
         
         Description:
             Calculates the square root of a number.
@@ -261,6 +289,7 @@ class ScientificCalculator:
         Method: logarithm
         Version: v1
         Status: Production
+        Last Updated: 2024-02-12
         
         Description:
             Calculates the logarithm of a number with a specified base.
@@ -284,6 +313,7 @@ class ScientificCalculator:
         Method: sine
         Version: v1
         Status: Production
+        Last Updated: 2024-02-12
         
         Description:
             Calculates the sine of an angle provided in degrees.
@@ -303,6 +333,7 @@ class ScientificCalculator:
         Method: cosine
         Version: v1
         Status: Production
+        Last Updated: 2024-02-12
         
         Description:
             Calculates the cosine of an angle provided in degrees.
@@ -322,6 +353,7 @@ class ScientificCalculator:
         Method: tangent
         Version: v1
         Status: Production
+        Last Updated: 2024-02-12
         
         Description:
             Calculates the tangent of an angle provided in degrees.

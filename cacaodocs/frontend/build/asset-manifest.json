@@ -1,14 +1,14 @@
 {
   "files": {
     "main.js": "./bundle.js",
-    "styles.css": "./static/css/styles.d479f67a.css",
+    "styles.css": "./static/css/styles.7002560b.css",
     "bundle.js.map": "./bundle.js.map",
     "index.html": "./index.html",
     "bundle.js.LICENSE.txt": "./bundle.js.LICENSE.txt",
-    "styles.d479f67a.css.map": "./static/css/styles.d479f67a.css.map"
+    "styles.7002560b.css.map": "./static/css/styles.7002560b.css.map"
   },
   "entrypoints": [
-    "static/css/styles.d479f67a.css",
+    "static/css/styles.7002560b.css",
     "bundle.js"
   ]
 }

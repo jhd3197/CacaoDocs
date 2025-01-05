@@ -49,6 +49,7 @@ const Api: React.FC<ApiProps> = ({ data, types }) => {
   const [selectedMethods, setSelectedMethods] = useState<string[]>([]);
   const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
   const [selectedResponseCodes, setSelectedResponseCodes] = useState<string[]>([]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]); // Add this line
 
   useEffect(() => {
     console.log('Api component received data:', data);
@@ -98,9 +99,14 @@ const Api: React.FC<ApiProps> = ({ data, types }) => {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => (
-        <Tag color={status === 'Production' ? 'green' : 'orange'}>{status}</Tag>
-      ),
+      render: (status: string) => {
+        const statusColors: Record<string, string> = {
+          'Production': 'green',
+          'In Review': 'orange',
+          'Planned': 'purple'
+        };
+        return <Tag color={statusColors[status] || 'default'}>{status}</Tag>;
+      },
     },
     {
       title: 'Version',
@@ -129,13 +135,18 @@ const Api: React.FC<ApiProps> = ({ data, types }) => {
         )
       )
     : [];
+  const uniqueStatuses = Array.isArray(data)  // Add this block
+    ? Array.from(new Set(data.map((item) => item.status)))
+    : [];
 
   const filterData = (items: ApiEndpoint[]) => {
     if (!Array.isArray(items)) return [];
+    
+    // Create a single filtered array instead of chaining filters
     return items.filter((item) => {
       const searchLower = searchText.toLowerCase();
       const matchesSearch =
-        searchText === '' ||
+        !searchText ||
         item.endpoint.toLowerCase().includes(searchLower) ||
         item.description.toLowerCase().includes(searchLower) ||
         item.function_name.toLowerCase().includes(searchLower) ||
@@ -147,6 +158,9 @@ const Api: React.FC<ApiProps> = ({ data, types }) => {
       const matchesVersion =
         selectedVersions.length === 0 || selectedVersions.includes(item.version);
 
+      const matchesStatus =
+        selectedStatuses.length === 0 || selectedStatuses.includes(item.status);
+
       const matchesResponse =
         selectedResponseCodes.length === 0 ||
         (item.responses &&
@@ -154,19 +168,23 @@ const Api: React.FC<ApiProps> = ({ data, types }) => {
             selectedResponseCodes.includes(code)
           ));
 
-      return matchesSearch && matchesMethod && matchesVersion && matchesResponse;
+      return (
+        matchesSearch &&
+        matchesMethod &&
+        matchesVersion &&
+        matchesStatus &&
+        matchesResponse
+      );
     });
   };
 
-  const filteredData = filterData(
-    selectedEndpoint
-      ? Array.isArray(data)
-        ? data.filter((item) => item.endpoint === selectedEndpoint)
-        : []
-      : Array.isArray(data)
-      ? data
-      : []
-  );
+  // Simplify the filteredData calculation
+  const filteredData = React.useMemo(() => {
+    const baseData = selectedEndpoint
+      ? data?.filter((item) => item.endpoint === selectedEndpoint)
+      : data;
+    return filterData(baseData || []);
+  }, [data, selectedEndpoint, searchText, selectedMethods, selectedVersions, selectedStatuses, selectedResponseCodes]);
 
   const renderContent = () => {
     if (loading) return <Spin />;
@@ -211,13 +229,26 @@ const Api: React.FC<ApiProps> = ({ data, types }) => {
                 value: code,
               }))}
             />
+            <Select
+              mode="multiple"
+              placeholder="Filter by Status"
+              style={{ minWidth: 200 }}
+              onChange={setSelectedStatuses}
+              options={uniqueStatuses.map((status) => ({
+                label: status,
+                value: status,
+              }))}
+            />
           </div>
         </Space>
 
         {viewMode === 'card' ? (
           <div>
             {filteredData.map((endpoint) => (
-              <div id={`api-${endpoint.endpoint}`} key={endpoint.endpoint}>
+              <div 
+                id={`api-${endpoint.endpoint}`} 
+                key={`${endpoint.endpoint}-${endpoint.method}-${endpoint.version}`}
+              >
                 {/* ---------------- PASS TYPES DOWN HERE ---------------- */}
                 <ApiCard endpoint={endpoint} types={types} />
               </div>
@@ -227,7 +258,7 @@ const Api: React.FC<ApiProps> = ({ data, types }) => {
           <Table
             dataSource={filteredData}
             columns={columns}
-            rowKey="endpoint"
+            rowKey={(record) => `${record.endpoint}-${record.method}-${record.version}`}
             pagination={{ pageSize: 10 }}
           />
         )}

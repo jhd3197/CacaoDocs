@@ -12,6 +12,7 @@ import base64
 from .type_definitions import TYPE_DEFINITIONS
 from bs4 import BeautifulSoup
 import textwrap
+from datetime import datetime
 import logging  # Add this line
 
 class CacaoDocs:
@@ -137,6 +138,25 @@ class CacaoDocs:
             match = re.search(pattern, docstring)
             if match:
                 metadata[key] = match.group(1).strip()
+
+                if key == "last_updated":
+                    date_str = metadata[key]
+                    try:
+                        # Attempt to parse ISO datetime with time
+                        try:
+                            dt = datetime.fromisoformat(date_str)
+                        except ValueError:
+                            # If parsing with time fails, try parsing date only
+                            dt = datetime.strptime(date_str, "%Y-%m-%d")
+                        # Convert to ISO 8601 format
+                        metadata[key] = dt.isoformat()
+                    except ValueError as e:
+                        if cls._config.get("verbose"):
+                            print(f"[CacaoDocs] Error parsing 'last_updated': {e}")
+                        # Handle the error as needed, e.g., set to None or raise an exception
+                        metadata[key] = None
+
+                    
                 if cls._config.get("verbose"):
                     print(f"[CacaoDocs] Found {key}: {metadata[key]}")
 

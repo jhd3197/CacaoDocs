@@ -73,5 +73,4 @@ declare global {
 }
 
 export interface TypeDefinition extends TypeItem {
-  // TypeItem already has all the fields we need
 }

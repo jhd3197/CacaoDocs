@@ -16,7 +16,7 @@ interface LayoutProps {
     children: ReactNode;
 }
 
-const CustomLayout: React.FC<LayoutProps> = ({ apiData, children }) => {
+const CustomLayout: React.FC<LayoutProps> = ({ children, apiData }) => {
     const location = useLocation();
     const isHomePage = location.pathname === '/';
     const needsSecondarySidebar = !isHomePage;
@@ -34,7 +34,7 @@ const CustomLayout: React.FC<LayoutProps> = ({ apiData, children }) => {
                     zIndex: 2
                 }}
             >
-                <MainSidebar />
+                <MainSidebar apiData={apiData} />
             </Sider>
             <AntLayout style={{ marginLeft: MAIN_SIDEBAR_WIDTH }}>
                 {needsSecondarySidebar && (

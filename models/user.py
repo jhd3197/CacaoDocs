@@ -46,6 +46,7 @@ class Address:
 @CacaoDocs.doc_api(doc_type="types", tag="models")
 class User:
     """
+    Last Updated: 2025-01-02
     Description:
         Represents a user in the system with extended information.
 

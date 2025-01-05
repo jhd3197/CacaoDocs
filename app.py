@@ -58,7 +58,7 @@ def get_user(user_id):
     Method:   GET
     Version:  v1
     Status:   Production
-    Last Updated: 2024-04-25
+    Last Updated: 2024-02-15
 
     Description:
         Retrieves the details of a user given their unique ID.
@@ -85,7 +85,7 @@ def update_user_email(user_id):
     Method:   PATCH
     Version:  v1
     Status:   In Review
-    Last Updated: 2024-04-25
+    Last Updated: 2024-01-22
 
     Description:
         Updates the email address of an existing user.
@@ -117,7 +117,7 @@ def delete_user(user_id):
     Method:   DELETE
     Version:  v1
     Status:   In Review
-    Last Updated: 2024-04-25
+    Last Updated: 2024-04-24
 
     Description:
         Deletes an existing user from the system.
@@ -145,8 +145,8 @@ def list_users():
     Endpoint: /api/users
     Method:   GET
     Version:  v1
-    Status:   Production
-    Last Updated: 2024-04-25
+    Status:   Planned
+    Last Updated: 2025-01-02
 
     Description:
         Retrieves a list of all users in the system.
@@ -169,7 +169,7 @@ def get_documentation():
     Method:   GET
     Version:  v1
     Status:   Production
-    Last Updated: 2024-04-25
+    Last Updated: 2024-02-15
 
     Description:
         Returns a JSON object containing metadata for all documented endpoints.
@@ -186,7 +186,7 @@ def get_documentation_html():
     Method:   GET
     Version:  v1
     Status:   Production
-    Last Updated: 2024-04-25
+    Last Updated: 2024-02-15
 
     Description:
         Returns an HTML page containing the API documentation.
@@ -206,7 +206,7 @@ def get_documentation_one():
     Method:   GET
     Version:  v1
     Status:   Production
-    Last Updated: 2024-04-27
+    Last Updated: 2024-02-17
 
     Description:
         Returns a JSON object containing one configuration from each category.
@@ -223,7 +223,7 @@ def get_documentation_two():
     Method:   GET
     Version:  v1
     Status:   Production
-    Last Updated: 2024-04-27
+    Last Updated: 2024-08-17
 
     Description:
         Returns a JSON object containing two configurations from each category.
@@ -240,7 +240,7 @@ def get_documentation_four():
     Method:   GET
     Version:  v1
     Status:   Production
-    Last Updated: 2024-04-27
+    Last Updated: 2025-01-02
 
     Description:
         Returns a JSON object containing four configurations from each category.

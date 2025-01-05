@@ -16,7 +16,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const fetchDevData = async () => {
       try {
-        const response = await fetch('http://localhost:5000/docs-four');
+        const response = await fetch('http://localhost:5000/docs');
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }
@@ -89,7 +89,7 @@ const App: React.FC = () => {
       <Router>
         <CustomLayout apiData={apiData}>
           <Routes>
-            <Route path="/" element={<Home />} />
+            <Route path="/" element={<Home data={apiData} />} />
             <Route path="/api" element={<Api data={apiData.api} types={apiData.types} />} />
             <Route path="/types" element={<Types data={apiData.types} />} />
             <Route path="/docs" element={<Docs data={apiData.docs} types={apiData.types} />} />

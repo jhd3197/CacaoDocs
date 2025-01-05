@@ -28,6 +28,7 @@ export interface DocItem {
     type: string;
     version: string;
     status: string;
+    last_updated?: string;
     inputs?: string[];
     returns?: {
         description: string;
@@ -42,6 +43,7 @@ interface TypeArgument {
     bg_color: string;
     color: string;
     description: string;
+    last_updated?: string;
     emoji: string;
     type: string;
 }

@@ -6,13 +6,20 @@
   "dependencies": {
     "@ant-design/icons": "^5.0.0",
     "@craco/craco": "^7.1.0",
+    "@reactflow/background": "^11.3.14",
+    "@reactflow/controls": "^11.2.14",
+    "@reactflow/core": "^11.11.4",
+    "@types/dagre": "^0.7.52",
     "antd": "^5.0.0",
     "core-js": "^3.23.3",
+    "dagre": "^0.8.5",
+    "framer-motion": "^11.15.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.28.1",
     "react-scripts": "^5.0.1",
     "react-syntax-highlighter": "^15.5.0",
+    "reactflow": "^11.11.4",
     "styled-components": "^6.1.13"
   },
   "devDependencies": {
@@ -24,7 +31,8 @@
     "cross-env": "^7.0.3",
     "html-inline-script-webpack-plugin": "^3.2.1",
     "html-loader": "^5.1.0",
-    "html-webpack-plugin": "^5.6.3"
+    "html-webpack-plugin": "^5.6.3",
+    "react-flow-types": "^0.2.0-beta.6"
   },
   "scripts": {
     "start": "cross-env PORT=3005 NODE_OPTIONS=--openssl-legacy-provider craco start",
