@@ -1,5 +1,5 @@
 # app.py
-
+import os
 from flask import Flask, request, jsonify, render_template, json
 from models.database import MockDatabase
 
@@ -250,10 +250,48 @@ def get_documentation_four():
     response.headers.add('Access-Control-Allow-Origin', '*')  # Enable CORS
     return response, 200
 
-@app.route('/home')
-def home():
-    # Render the navbar.html template
-    return render_template('navbar.html')
+@app.route('/zip', methods=['GET'])
+def get_documentation_zip():
+    """
+    Endpoint: /zip
+    Method:   GET
+    Version:  v1
+    Status:   Production
+    Last Updated: 2024-02-17
+
+    Description:
+        Returns a ZIP archive containing all documentation files.
+    """
+    zip_file = CacaoDocs.get_zip("docs.zip")
+    return "Done", 200
+
+@app.route('/generate', methods=['GET'])
+def generate_documentation():
+    """
+    Endpoint: /generate
+    Method:   GET
+    Version:  v1
+    Status:   Production
+    Last Updated: 2024-02-17
+
+    Description:
+        Generates documentation files in a specified directory.
+        If the directory exists, it will be deleted and recreated.
+
+    Responses:
+        200:
+            description: "Documentation generated successfully."
+            example: {"message": "Documentation generated in /path/to/docs"}
+        500:
+            description: "Error generating documentation."
+            example: {"error": "Failed to generate documentation: error details"}
+    """
+    try:
+        output_dir = os.path.join(os.getcwd(), 'docs')
+        CacaoDocs.get_docs(output_dir)
+        return jsonify({"message": f"Documentation generated in {output_dir}"}), 200
+    except Exception as e:
+        return jsonify({"error": f"Failed to generate documentation: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)

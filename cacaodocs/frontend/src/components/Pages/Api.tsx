@@ -4,29 +4,8 @@ import { TableOutlined, AppstoreOutlined, SearchOutlined } from '@ant-design/ico
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json';
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
-import { ApiEndpoint } from '../../global';
+import type { AppData } from '../../global';
 import ApiCard from '../Cards/ApiCard';
-
-// ------------------ ADD THESE IMPORTS OR DEFINE YOUR OWN TypeDefinition INTERFACE ------------------ //
-// For example, if your `TypeDefinition` interface is in the global file or somewhere else,
-// adjust the import accordingly. It's the same shape used in Types.tsx
-interface TypeArgument {
-  bg_color: string;
-  color: string;
-  description: string;
-  emoji: string;
-  type: string;
-}
-
-interface TypeDefinition {
-  args: Record<string, TypeArgument>;
-  description: string;
-  function_name: string;
-  tag: string;
-  type: string;
-}
-
-// ----------------------------------------------------------------------------------------------- //
 
 const { Title } = Typography;
 const { Search } = Input;
@@ -35,13 +14,11 @@ const { Content } = Layout;
 
 SyntaxHighlighter.registerLanguage('json', json);
 
-// ------------------ UPDATED PROPS TO ALSO RECEIVE `types` ------------------ //
 interface ApiProps {
-  data: ApiEndpoint[];
-  types: TypeDefinition[];  // <--- New prop to pass type data
+  data: AppData;
 }
 
-const Api: React.FC<ApiProps> = ({ data, types }) => {
+const Api: React.FC<ApiProps> = ({ data }) => {
   const [loading, setLoading] = useState(true);
   const [selectedEndpoint, setSelectedEndpoint] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
@@ -49,11 +26,11 @@ const Api: React.FC<ApiProps> = ({ data, types }) => {
   const [selectedMethods, setSelectedMethods] = useState<string[]>([]);
   const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
   const [selectedResponseCodes, setSelectedResponseCodes] = useState<string[]>([]);
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]); // Add this line
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
 
   useEffect(() => {
     console.log('Api component received data:', data);
-    if (Array.isArray(data)) {
+    if (data && data.api) {
       setLoading(false);
     }
   }, [data]);
@@ -122,24 +99,24 @@ const Api: React.FC<ApiProps> = ({ data, types }) => {
   ];
 
   // Ensure data is an array before extracting unique values
-  const uniqueMethods = Array.isArray(data)
-    ? Array.from(new Set(data.map((item) => item.method)))
+  const uniqueMethods = Array.isArray(data.api)
+    ? Array.from(new Set(data.api.map((item) => item.method)))
     : [];
-  const uniqueVersions = Array.isArray(data)
-    ? Array.from(new Set(data.map((item) => item.version)))
+  const uniqueVersions = Array.isArray(data.api)
+    ? Array.from(new Set(data.api.map((item) => item.version)))
     : [];
-  const uniqueResponseCodes = Array.isArray(data)
+  const uniqueResponseCodes = Array.isArray(data.api)
     ? Array.from(
         new Set(
-          data.flatMap((item) => (item.responses ? Object.keys(item.responses) : []))
+          data.api.flatMap((item) => (item.responses ? Object.keys(item.responses) : []))
         )
       )
     : [];
-  const uniqueStatuses = Array.isArray(data)  // Add this block
-    ? Array.from(new Set(data.map((item) => item.status)))
+  const uniqueStatuses = Array.isArray(data.api)  // Add this block
+    ? Array.from(new Set(data.api.map((item) => item.status)))
     : [];
 
-  const filterData = (items: ApiEndpoint[]) => {
+  const filterData = (items: typeof data.api) => {
     if (!Array.isArray(items)) return [];
     
     // Create a single filtered array instead of chaining filters
@@ -181,8 +158,8 @@ const Api: React.FC<ApiProps> = ({ data, types }) => {
   // Simplify the filteredData calculation
   const filteredData = React.useMemo(() => {
     const baseData = selectedEndpoint
-      ? data?.filter((item) => item.endpoint === selectedEndpoint)
-      : data;
+      ? data?.api?.filter((item) => item.endpoint === selectedEndpoint)
+      : data?.api;
     return filterData(baseData || []);
   }, [data, selectedEndpoint, searchText, selectedMethods, selectedVersions, selectedStatuses, selectedResponseCodes]);
 
@@ -249,8 +226,7 @@ const Api: React.FC<ApiProps> = ({ data, types }) => {
                 id={`api-${endpoint.endpoint}`} 
                 key={`${endpoint.endpoint}-${endpoint.method}-${endpoint.version}`}
               >
-                {/* ---------------- PASS TYPES DOWN HERE ---------------- */}
-                <ApiCard endpoint={endpoint} types={types} />
+                <ApiCard endpoint={endpoint} types={data.types} config={data.config} />
               </div>
             ))}
           </div>
@@ -267,7 +243,7 @@ const Api: React.FC<ApiProps> = ({ data, types }) => {
   };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: '100vh', background: data.config?.theme.bg_color || '#fff' }}>
       <Content style={{ padding: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
           <Space>

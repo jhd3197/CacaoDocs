@@ -5,25 +5,31 @@ import {
     HomeOutlined, 
     ApiOutlined, 
     BlockOutlined, 
-    FileTextOutlined 
+    FileTextOutlined,
+    GithubOutlined
 } from '@ant-design/icons';
 import logo from '../../assets/img/logo.png';
 
+import type { AppData } from '../../global';
+
 const { Title } = Typography;
 
+
 interface MainSidebarProps {
-    apiData: {
-        api: any[];
-        docs: any[];
-        types: any[];
-    };
+    apiData: AppData;
 }
 
 const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
     const location = useLocation();
+    const logoSource = apiData.config.logo_url || logo;
 
     return (
-        <div style={{ padding: '16px 0' }}>
+        <div style={{ 
+            padding: '16px 0',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column'
+        }}>
             <div style={{ 
                 padding: '0 24px', 
                 marginBottom: '24px',
@@ -31,7 +37,7 @@ const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
                 alignItems: 'center',
             }}>
                 <Image
-                    src={logo}
+                    src={logoSource}
                     alt="CacaoDocs Logo"
                     preview={false}
                     style={{
@@ -43,7 +49,7 @@ const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
             <Menu
                 mode="inline"
                 selectedKeys={[location.pathname]}
-                style={{ borderRight: 0 }}
+                style={{ borderRight: 0, flex: 1 }}
             >
                 <Menu.Item key="/" icon={<HomeOutlined />}>
                     <Link to="/">Home</Link>
@@ -64,6 +70,28 @@ const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
                     </Menu.Item>
                 )}
             </Menu>
+            
+            <div style={{
+                padding: '16px 24px',
+                borderTop: '1px solid rgba(0, 0, 0, 0.06)',
+                textAlign: 'center'
+            }}>
+                <a 
+                    href="https://github.com/jhd3197/CacaoDocs" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    style={{ fontSize: '24px', color: 'inherit' }}
+                >
+                    <GithubOutlined />
+                </a>
+                <div style={{ 
+                    marginTop: '8px',
+                    fontSize: '12px',
+                    color: 'rgba(0, 0, 0, 0.45)'
+                }}>
+                    Made with CacaoDocs ❤️
+                </div>
+            </div>
         </div>
     );
 };

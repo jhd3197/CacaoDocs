@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.js": "./bundle.js",
+    "styles.css": "./static/css/styles.e575ff4e.css",
+    "bundle.js.map": "./bundle.js.map",
+    "index.html": "./index.html",
+    "bundle.js.LICENSE.txt": "./bundle.js.LICENSE.txt",
+    "images/data.js": "./images/247245c2e4427002df30.js",
+    "styles.e575ff4e.css.map": "./static/css/styles.e575ff4e.css.map"
+  },
+  "entrypoints": [
+    "static/css/styles.e575ff4e.css",
+    "bundle.js"
+  ]
+}

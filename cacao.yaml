@@ -1,16 +1,46 @@
 # CacaoDocs Configuration
-
-# Documentation settings
-title: "System Documentation"
-description: "API and Type documentation for the system"
+title: "Welcome to CacaoDocs Dashboard"
+description: "Manage and explore your documentation with ease"
+footer_text: "Made with CacaoDocs\n&#10084;"
+github_url: "https://github.com/jhd3197/CacaoDocs"
 version: "1.0.0"
 
-# Theme configuration
+# Theme Settings 
 theme:
-  primary_color: "#543A14"
+
+  # General configuration
+  primary_color: "#4c1702"                     # Deep Chocolate Brown
+  secondary_color: "#6f4e37"                   # Milk Chocolate
+  bg_color: "#f1f1f1"                          # Creamy Beige
+  text_color: "#3d1c02"                        # Dark Cocoa
+  highlight_code_bg_color: "#d2a679"           # Caramel
+  highlight_code_border_color: "#6f4e37"       # Milk Chocolate
+
+  # Navigation bar configuration
+  sidebar_bg_color: "#fff"                   # Light Gray
+  sidebar_text_color: "#4c1702"                # Creamy Beige
+  sidebar_highlight_bg_color: "#6f4e37"        # Milk Chocolate
+  sidebar_highlight_text_color: "#ffffff"      # White
+  secondary_sidebar_bg_color: "#6f4e37"        # Milk Chocolate
+  secondary_sidebar_text_color: "#ffffff"       # White
+  secondary_sidebar_highlight_bg_color: "#d2a679" # Caramel
+  secondary_sidebar_highlight_text_color: "#ffffff" # White
+
+  # Home page configuration
+  home_page_welcome_bg_1: "#6f4e37"            # Milk Chocolate
+  home_page_welcome_bg_2: "#a1866f"            # Light Brown
+  home_page_welcome_text_color: "#ffffff"      # White
+  home_page_card_bg_color: "#ffffff"           # White
+  home_page_card_text_color: "#3d1c02"         # Dark Cocoa
+
+  # Json Configuration
+  code_bg_color: "#2e1c0a"                      # Very Dark Brown
+  type_bg_color_1: "#6f4e37"                    # Milk Chocolate
+  type_bg_color_2: "#6f4e3740"                  # Milk Chocolate with 25% Opacity
+  type_text_color: "#3d1c02"                    # Dark Cocoa
 
 # Logo configuration
-logo_url: "cacaodocs/templates/assets/img/logo.png"
+logo_url: ""
 
 # Type mappings (how types are displayed in the UI)
 type_mappings:

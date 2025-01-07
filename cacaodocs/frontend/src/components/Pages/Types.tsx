@@ -3,29 +3,13 @@ import { Table, Spin, Tag, Layout, Switch, Space, Input, Select, Button } from '
 import { TableOutlined, AppstoreOutlined } from '@ant-design/icons';
 import TypeCard from './TypeCard';
 import ERDiagramView from './ERDiagramView';
-import { TypeItem } from '../../global';
+import type { AppData, TypeItem } from '../../global';
 
 const { Content } = Layout;
 const { Search } = Input;
 
-export interface TypeArgument {
-  bg_color: string;
-  color: string;
-  description: string;
-  emoji: string;
-  type: string;
-}
-
-export interface TypeDefinition {
-  args: Record<string, TypeArgument>;
-  description: string;
-  function_name: string;
-  tag: string;
-  type: string;
-}
-
 interface TypesProps {
-  data: TypeItem[];
+  data: AppData;
 }
 
 const Types: React.FC<TypesProps> = ({ data }) => {
@@ -33,23 +17,17 @@ const Types: React.FC<TypesProps> = ({ data }) => {
   const [viewMode, setViewMode] = useState<'card' | 'table' | 'er'>('card');
   const [searchText, setSearchText] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [typesData, setTypesData] = useState<TypeDefinition[]>([]);
+  const [typesData, setTypesData] = useState<TypeItem[]>([]);
 
-  /**
-   * Instead of fetching from a server, we mimic the Docs.tsx approach:
-   * directly take the "data" prop passed in and set it to local state.
-   */
   useEffect(() => {
-    // If your incoming `data` is already shaped as needed,
-    // simply set it and stop loading.
-    setTypesData(data as unknown as TypeDefinition[]);
+    setTypesData(data.types);
     setLoading(false);
   }, [data]);
 
   // Optional: If you need a type definition generator
   // or any additional transformations, you can do so below.
   // For example, generating a type interface string:
-  const generateTypeDefinition = (type: TypeDefinition): string => {
+  const generateTypeDefinition = (type: TypeItem): string => {
     const sortedProperties = Object.entries(type.args)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, value]) => {
@@ -69,7 +47,7 @@ const Types: React.FC<TypesProps> = ({ data }) => {
   const uniqueTags = Array.from(new Set(typesData.map(item => item.tag)));
 
   // Filtering logic
-  const filterData = (items: TypeDefinition[]) => {
+  const filterData = (items: TypeItem[]) => {
     return items.filter(item => {
       const searchLower = searchText.toLowerCase();
       const matchesSearch =
@@ -90,7 +68,7 @@ const Types: React.FC<TypesProps> = ({ data }) => {
       title: 'Function Name',
       dataIndex: 'function_name',
       key: 'function_name',
-      sorter: (a: TypeDefinition, b: TypeDefinition) =>
+      sorter: (a: TypeItem, b: TypeItem) =>
         a.function_name.localeCompare(b.function_name)
     },
     {
@@ -107,7 +85,7 @@ const Types: React.FC<TypesProps> = ({ data }) => {
     {
       title: 'Properties',
       key: 'properties',
-      render: (text: string, record: TypeDefinition) =>
+      render: (text: string, record: TypeItem) =>
         Object.keys(record.args).length
     }
   ];
@@ -173,7 +151,7 @@ const Types: React.FC<TypesProps> = ({ data }) => {
   };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: '100vh', background: data.config?.theme.bg_color || '#fff' }}>
       <Content style={{ padding: '24px' }}>
         {/* Toggle: Table or Card View */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>

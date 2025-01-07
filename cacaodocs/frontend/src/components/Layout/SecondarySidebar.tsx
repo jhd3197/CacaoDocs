@@ -3,51 +3,16 @@ import { Menu, Tag, Typography, Input } from 'antd';
 import { useLocation } from 'react-router-dom';
 import { ApiOutlined, SearchOutlined, CodeOutlined, BookOutlined } from '@ant-design/icons';
 import './SecondarySidebar.css';
+import { Background } from 'reactflow';
+import type { AppData, DocItem, ApiEndpoint, TypeItem  } from '../../global';
 
 const { Text } = Typography;
 const { SubMenu } = Menu;
 
-interface ApiItem {
-    endpoint: string;
-    method: string;
-    tag: string;
-}
-
-interface TypeItem {
-    function_name: string;
-    tag: string;
-}
-
-interface ReturnType {
-    description: string;
-    full_type: string;
-    is_list: boolean;
-    is_type_ref: boolean;
-    type_name: string;
-}
-
-interface DocItem {
-    args?: Record<string, any>;
-    description?: string;
-    function_name: string;
-    method?: string;
-    returns?: ReturnType;
-    status?: string;
-    tag: string;
-    type: string;
-    version?: string;
-    function_source?: string;
-    inputs?: string[];
-    outputs?: string | null;
-}
 
 interface SecondarySidebarProps {
     onEndpointSelect?: (endpoint: string) => void;
-    data: {
-        api: ApiItem[];
-        docs: DocItem[];
-        types: TypeItem[];
-    };
+    data: AppData
 }
 
 const methodColors: Record<string, string> = {
@@ -58,63 +23,8 @@ const methodColors: Record<string, string> = {
     PATCH: '#8B5CF6'
 };
 
-const MENU_STYLES = {
-    base: {
-        borderRight: 0,
-        padding: '0 12px 24px',
-        background: 'transparent'
-    },
-    container: {
-        height: '100vh',
-        overflowY: 'auto' as const,
-        backgroundColor: '#2A2420',
-        borderRight: '1px solid rgba(0, 0, 0, 0.2)',
-        '& .ant-menu': {
-            backgroundColor: 'transparent',
-            color: '#FFFFFF'
-        }
-    },
-    search: {
-        padding: '12px',
-        position: 'sticky' as const,
-        top: 0,
-        backgroundColor: '#2A2420',
-        borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-        zIndex: 1
-    },
-    menuItem: {
-        margin: '4px 0',
-        padding: '8px 12px',
-        borderRadius: '6px',
-        color: 'rgba(255, 255, 255, 0.85)',
-        '&:hover': {
-            backgroundColor: 'rgba(255, 255, 255, 0.1)'
-        }
-    },
-    subMenu: {
-        fontWeight: 600,
-        color: '#E6D5C9',
-        fontSize: '14px',
-        textTransform: 'uppercase' as const,
-        letterSpacing: '0.05em',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px'
-    },
-    groupTitle: {
-        fontSize: '14px',
-        fontWeight: 600,
-        color: '#E6D5C9',
-        textTransform: 'uppercase' as const,
-        letterSpacing: '0.05em',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px'
-    } as CSSProperties
-};
-
 const EndpointItem: React.FC<{
-    endpoint: ApiItem;
+    endpoint: ApiEndpoint;
     onClick: () => void;
 }> = ({ endpoint, onClick }) => (
     <div
@@ -190,17 +100,18 @@ const MenuContainer: React.FC<{
     searchText: string; 
     onSearchChange: (value: string) => void;
     openKeys: string[];
-}> = ({ children, searchText, onSearchChange, openKeys }) => (
-    <div style={MENU_STYLES.container}>
-        <div style={MENU_STYLES.search}>
+    styles: {
+        container: React.CSSProperties;
+        search: React.CSSProperties;
+        base: React.CSSProperties;
+    };
+}> = ({ children, searchText, onSearchChange, openKeys, styles }) => (
+    <div style={styles.container}>
+        <div style={styles.search}>
             <SearchInput value={searchText} onChange={onSearchChange} />
         </div>
         <Menu 
             mode="inline" 
-            style={MENU_STYLES.base}
-            theme="dark"
-            className="custom-dark-menu"
-            defaultOpenKeys={openKeys}
             openKeys={openKeys}
         >
             {children}
@@ -220,6 +131,37 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, d
 
     const location = useLocation();
     const [searchText, setSearchText] = useState('');
+
+    // Move MENU_STYLES inside the component
+    const menuStyles = {
+        base: {
+            borderRight: 0,
+            padding: '0 12px 24px',
+            background: 'transparent'
+        },
+        container: {
+            height: '100vh',
+            overflowY: 'auto' as const,
+            borderRight: '1px solid rgba(0, 0, 0, 0.2)',
+
+        },
+        search: {
+            padding: '12px',
+            position: 'sticky' as const,
+            top: 0,
+            backgroundColor: 'rgb(42 36 32 / 30%)',
+            zIndex: 1
+        },
+        groupTitle: {
+            fontSize: '14px',
+            fontWeight: 600,
+            textTransform: 'uppercase' as const,
+            letterSpacing: '0.05em',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+        } as CSSProperties
+    };
 
     const filterItems = <T extends { function_name?: string; endpoint?: string }>(items: T[]) => {
         return items.filter(item => 
@@ -271,12 +213,13 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, d
                 searchText={searchText} 
                 onSearchChange={setSearchText}
                 openKeys={allTags}
+                styles={menuStyles}
             >
                 {typesByTag.map(([tag, types]) => (
                     <SubMenu 
                         key={tag} 
                         title={
-                            <span style={MENU_STYLES.groupTitle}>
+                            <span style={menuStyles.groupTitle}>
                                 {SECTION_ICONS.types}
                                 {tag.charAt(0).toUpperCase() + tag.slice(1)}
                             </span>
@@ -287,7 +230,7 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, d
                                 key={type.function_name}
                                 onClick={() => scrollToType(type.function_name)}
                             >
-                                {type.function_name}
+                                {type.function_name} ( )
                             </Menu.Item>
                         ))}
                     </SubMenu>
@@ -319,12 +262,13 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, d
                 searchText={searchText} 
                 onSearchChange={setSearchText}
                 openKeys={allTags}
+                styles={menuStyles}
             >
                 {docsByTag.map(([tag, docs]) => (
                     <SubMenu 
                         key={tag} 
                         title={
-                            <span style={MENU_STYLES.groupTitle}>
+                            <span style={menuStyles.groupTitle}>
                                 {SECTION_ICONS.docs}
                                 {tag.charAt(0).toUpperCase() + tag.slice(1)}
                             </span>
@@ -355,7 +299,7 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, d
         };
 
         const groupedEndpoints = Object.entries(
-            filteredEndpoints.reduce((acc: Record<string, ApiItem[]>, endpoint) => {
+            filteredEndpoints.reduce((acc: Record<string, ApiEndpoint[]>, endpoint) => {
                 const tag = endpoint.tag;
                 if (!acc[tag]) acc[tag] = [];
                 acc[tag].push(endpoint);
@@ -370,6 +314,7 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, d
                 searchText={searchText} 
                 onSearchChange={setSearchText}
                 openKeys={allTags}
+                styles={menuStyles}
             >
                 {groupedEndpoints.map(([tag, endpoints]) => (
                     <Menu.SubMenu
@@ -392,7 +337,7 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, d
                         }
                     >
                         <div style={{ padding: '0 4px' }}>
-                            {filterItems(endpoints).map((endpoint: ApiItem) => (
+                            {filterItems(endpoints).map((endpoint: ApiEndpoint) => (
                                 <EndpointItem
                                     key={endpoint.endpoint}
                                     endpoint={endpoint}
@@ -414,6 +359,7 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, d
             searchText={searchText} 
             onSearchChange={setSearchText}
             openKeys={allTags}
+            styles={menuStyles}
         >
             <Menu.Item key="1">Introduction</Menu.Item>
             <Menu.Item key="2">Quick Start</Menu.Item>

@@ -13,7 +13,10 @@ from .type_definitions import TYPE_DEFINITIONS
 from bs4 import BeautifulSoup
 import textwrap
 from datetime import datetime
-import logging  # Add this line
+import logging
+import io
+import zipfile
+import shutil
 
 class CacaoDocs:
     """A class to handle documentation processes for Python code."""
@@ -22,12 +25,20 @@ class CacaoDocs:
 
     # Default config includes 'verbose': False so logs are off by default
     _config = {
-        "title": "Documentation",
-        "description": "Welcome to the documentation.",
+        "title": "Welcome to CacaoDocs Dashboard",
+        "description": "Manage and explore your documentation with ease",
         "version": "1.0.0",
         "theme": {
             "primary_color": "#4CAF50",
-            "secondary_color": "#45a049"
+            "secondary_color": "#8b5d3b",
+            "background_color": "#f5f5f5",
+            "text_color": "#331201",
+            "sidebar_background_color": "#ffffff",
+            "sidebar_text_color": "#331201",
+            "sidebar_highlight_background_color": "#736d67",
+            "sidebar_highlight_text_color": "#ffffff",
+            "highlight_code_background_color": "#3a2f2a",
+            "highlight_code_border_color": "#8b5d3b"
         },
         "type_mappings": {
             "api": "API",
@@ -477,7 +488,10 @@ class CacaoDocs:
     @classmethod
     def get_json(cls) -> dict:
         """Retrieve the current documentation registry as JSON."""
-        return cls._registry
+        return {
+            **cls._registry,
+            "configs": cls._config
+        }
 
     @classmethod
     def get_html(cls) -> str:
@@ -573,3 +587,177 @@ class CacaoDocs:
         cls._logger.debug("HTML content successfully updated.")  # Replace print with logging
         
         return updated_html
+
+    @classmethod
+    def get_zip(cls, output_path: Optional[str] = None) -> bytes:
+        """
+        Generate a zip file containing the documentation with all assets.
+        
+        Args:
+            output_path (Optional[str]): Path where to save the zip file. 
+                                       If None, returns the bytes without saving.
+        
+        Returns:
+            bytes: The zip file content as bytes
+        """
+        try:
+            # Create an in-memory zip file
+            zip_buffer = io.BytesIO()
+            
+            with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+                # Get the build directory path
+                current_dir = Path(__file__).parent
+                build_dir = current_dir / "frontend" / "build"
+                
+                if not build_dir.exists():
+                    raise FileNotFoundError(f"Build directory not found at {build_dir}")
+                
+                cls._logger.info(f"Creating documentation zip from {build_dir}")
+                
+                # Get JSON content for the documentation
+                json_content = cls.get_json()
+                
+                # Read and modify index.html
+                index_path = build_dir / "index.html"
+                if not index_path.exists():
+                    raise FileNotFoundError(f"index.html not found at {index_path}")
+                
+                # Add all files from build directory
+                for path in build_dir.rglob('*'):
+                    if path.is_file():
+                        try:
+                            archive_path = path.relative_to(build_dir)
+                            cls._logger.debug(f"Adding {path} to zip as {archive_path}")
+                            
+                            # Special handling for index.html
+                            if path.name == 'index.html':
+                                with open(path, 'r', encoding='utf-8') as f:
+                                    html_content = f.read()
+                                
+                                # Modify the HTML to include the JSON data
+                                soup = BeautifulSoup(html_content, 'html.parser')
+                                json_js = json.dumps(json_content, ensure_ascii=False, indent=4)
+                                
+                                # Update or add globalData script
+                                script_found = False
+                                for script in soup.find_all('script'):
+                                    if script.string and 'window.globalData' in script.string:
+                                        script.string = f"window.globalData = {json_js};"
+                                        script_found = True
+                                        break
+                                
+                                if not script_found:
+                                    new_script = soup.new_tag('script')
+                                    new_script.string = f"window.globalData = {json_js};"
+                                    soup.body.append(new_script)
+                                
+                                zip_file.writestr(str(archive_path), str(soup))
+                            else:
+                                # For all other files, add them as-is
+                                with open(path, 'rb') as f:
+                                    zip_file.writestr(str(archive_path), f.read())
+                        except Exception as e:
+                            cls._logger.warning(f"Error adding file {path} to zip: {e}")
+                            continue
+            
+            # Get the zip file content
+            zip_content = zip_buffer.getvalue()
+            
+            # If output_path is provided, save the zip file
+            if output_path:
+                output_path = Path(output_path)
+                # Create directory if it doesn't exist
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                # Write the zip file
+                with open(output_path, 'wb') as f:
+                    f.write(zip_content)
+                cls._logger.info(f"Documentation zip saved to {output_path}")
+            
+            return zip_content
+            
+        except Exception as e:
+            cls._logger.error(f"Error generating zip file: {e}")
+            raise
+
+    @classmethod
+    def get_docs(cls, output_dir: str) -> None:
+        """
+        Generate documentation files in the specified directory.
+        If the directory exists, it will be deleted and recreated.
+        
+        Args:
+            output_dir (str): Path where to generate the documentation files
+        """
+        try:
+            output_path = Path(output_dir)
+            
+            # Delete the directory if it exists
+            if output_path.exists():
+                cls._logger.info(f"Removing existing directory: {output_path}")
+                shutil.rmtree(output_path)
+            
+            # Create the directory
+            output_path.mkdir(parents=True, exist_ok=True)
+            cls._logger.info(f"Created directory: {output_path}")
+            
+            # Get JSON content for the documentation
+            json_content = cls.get_json()
+            
+            # Get the build directory path
+            current_dir = Path(__file__).parent
+            build_dir = current_dir / "frontend" / "build"
+            
+            if not build_dir.exists():
+                raise FileNotFoundError(f"Build directory not found at {build_dir}")
+            
+            # Copy all files from build directory
+            for path in build_dir.rglob('*'):
+                if path.is_file():
+                    try:
+                        # Calculate relative path
+                        relative_path = path.relative_to(build_dir)
+                        # Calculate destination path
+                        dest_path = output_path / relative_path
+                        # Create parent directories if they don't exist
+                        dest_path.parent.mkdir(parents=True, exist_ok=True)
+                        
+                        # Special handling for index.html
+                        if path.name == 'index.html':
+                            with open(path, 'r', encoding='utf-8') as f:
+                                html_content = f.read()
+                            
+                            # Modify the HTML to include the JSON data
+                            soup = BeautifulSoup(html_content, 'html.parser')
+                            json_js = json.dumps(json_content, ensure_ascii=False, indent=4)
+                            
+                            # Update or add globalData script
+                            script_found = False
+                            for script in soup.find_all('script'):
+                                if script.string and 'window.globalData' in script.string:
+                                    script.string = f"window.globalData = {json_js};"
+                                    script_found = True
+                                    break
+                            
+                            if not script_found:
+                                new_script = soup.new_tag('script')
+                                new_script.string = f"window.globalData = {json_js};"
+                                soup.body.append(new_script)
+                            
+                            # Write modified index.html
+                            with open(dest_path, 'w', encoding='utf-8') as f:
+                                f.write(str(soup))
+                        else:
+                            # Copy file as-is
+                            shutil.copy2(path, dest_path)
+                        
+                        cls._logger.debug(f"Copied {path} to {dest_path}")
+                    
+                    except Exception as e:
+                        cls._logger.warning(f"Error copying file {path}: {e}")
+                        continue
+            
+            cls._logger.info(f"Documentation generated successfully in {output_dir}")
+        
+        except Exception as e:
+            cls._logger.error(f"Error generating documentation: {e}")
+            raise

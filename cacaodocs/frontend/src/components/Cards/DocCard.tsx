@@ -16,27 +16,12 @@ import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import python from 'react-syntax-highlighter/dist/esm/languages/hljs/python'; 
 import styled from 'styled-components';
 
+import { DocItem, TypeDefinition } from '../../global';
+
 SyntaxHighlighter.registerLanguage('python', python);
 
 const { Title, Paragraph, Text } = Typography;
 const { TabPane } = Tabs;
-
-// ------------------ Type Definitions ------------------ //
-interface TypeArgument {
-  bg_color: string;
-  color: string;
-  description: string;
-  emoji: string;
-  type: string;
-}
-
-interface TypeDefinition {
-  args: Record<string, TypeArgument>;
-  description: string;
-  function_name: string;
-  tag: string;
-  type: string;
-}
 
 interface ReturnsObject {
   description: string;
@@ -46,26 +31,11 @@ interface ReturnsObject {
   type_name: string;
 }
 
-interface DocItem {
-  args?: Record<string, any>;
-  description?: string;
-  function_name: string;
-  method?: string;
-  returns?: string | ReturnsObject;
-  status?: string;
-  tag: string;
-  type: string;
-  version?: string;
-  function_source?: string;
-  inputs?: string[];
-  outputs?: string | null;
-}
-
 interface DocCardProps {
   doc: DocItem;
-  types: TypeDefinition[]; // <-- Accept the `types` array
+  types: TypeDefinition[]; 
 }
-// ------------------------------------------------------- //
+
 
 // ------------------ Styled Components ------------------ //
 const StyledCard = styled(Card)`

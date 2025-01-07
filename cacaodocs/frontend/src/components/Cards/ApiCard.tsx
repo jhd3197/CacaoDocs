@@ -20,25 +20,7 @@ import {
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 import styled from 'styled-components';
-import { ApiEndpoint } from '../../global';
-
-// ------------------ ADD/DEFINE TypeDefinition HERE OR IMPORT FROM GLOBAL ------------------ //
-interface TypeArgument {
-  bg_color: string;
-  color: string;
-  description: string;
-  emoji: string;
-  type: string;
-}
-
-interface TypeDefinition {
-  args: Record<string, TypeArgument>;
-  description: string;
-  function_name: string;
-  tag: string;
-  type: string;
-}
-// ----------------------------------------------------------------------------------------- //
+import { ApiEndpoint, TypeDefinition, AppData } from '../../global';
 
 const { Title, Paragraph, Text } = Typography;
 const { TabPane } = Tabs;
@@ -84,18 +66,18 @@ const SyntaxContainer = styled.div`
 `;
 
 // Show a custom background for the TypeDefinition block
-const TypeDefinitionCard = styled.div`
-  background: rgb(245 240 235);
+const TypeDefinitionCard = styled.div<{ theme: AppData['config']['theme']}>`
+  background: ${props => props.theme.type_bg_color_2 || 'rgb(245 240 235)'};
   border-radius: 8px;
   padding: 16px;
-  border-left: 4px solid #8b5d3b;
-  color: #8b5d3b;
+  border-left: 4px solid ${props => props.theme.type_bg_color_1 || '#8b5d3b'};
+  color: ${props => props.theme.type_text_color || '#8b5d3b'};
 `;
 
 const TypeDetectedTag = styled(Tag)`
-  background: rgb(58 47 42 / 8%);
-  border: 1px solid #3a2f2a;
-  color: #3a2f2a; // Light brown text
+  background: ${props => props.theme?.type_bg_color_2 || 'rgb(245 240 235)'};
+  border: 1px solid ${props => props.theme?.type_text_color || '#3a2f2a'};
+  color: ${props => props.theme?.type_text_color || '#3a2f2a'}; // Light brown text
   margin-bottom: 12px;
   padding: 4px 8px;
   border-radius: 4px;
@@ -161,9 +143,10 @@ const detectTypeAnnotation = (
 };
 
 // ---------------- Mini preview for *SUB-TYPES* when hovered ----------------
-const SubTypeTooltip: React.FC<{ definition: TypeDefinition; allTypes: TypeDefinition[] }> = ({
+const SubTypeTooltip: React.FC<{ definition: TypeDefinition; allTypes: TypeDefinition[]; config: AppData['config']; }> = ({
   definition,
   allTypes,
+  config,
 }) => {
   return (
     <div style={{ padding: '8px', maxWidth: '300px', backgroundColor: '#f5f0eb' }}>
@@ -181,17 +164,22 @@ const SubTypeTooltip: React.FC<{ definition: TypeDefinition; allTypes: TypeDefin
             const nestedType = allTypes.find((t) => t.function_name === baseType);
 
             return (
-              <Paragraph key={argKey} style={{ marginBottom: 4, color: '#3a2f2a', fontSize: '12px' }}>
-                <Tag color="#9d6243">{argKey}</Tag>
+              <Paragraph key={argKey} style={{ marginBottom: 4, color:  config?.theme?.type_text_color, fontSize: '12px' }}>
+                <Tag style={{ 
+                  backgroundColor: config?.theme?.type_bg_color_2 || '#9d6243',
+                  color: config?.theme?.type_text_color || '#3a2f2a'
+                }}>
+                  {argKey}
+                </Tag>
                 
                 :{' '}
                 {nestedType ? (
                   // If there's a nested type, show it as a hoverable link with tooltip
                   <Tooltip
                     placement="right"
-                    title={<SubTypeTooltip definition={nestedType} allTypes={allTypes} />}
-                    overlayStyle={{ backgroundColor: '#f5f0eb' }} 
-                    color='#f5f0eb'
+                    title={<SubTypeTooltip definition={nestedType} allTypes={allTypes} config={config} />}
+                    overlayStyle={{ backgroundColor: config?.theme?.type_bg_color_2 }}
+                    color = {config?.theme?.type_text_color || '#3a2f2a'}
                   >
                     <Text
                       style={{
@@ -220,9 +208,10 @@ const SubTypeTooltip: React.FC<{ definition: TypeDefinition; allTypes: TypeDefin
 };
 
 // -------------- UPDATED MINI-PREVIEW COMPONENT FOR THE FOUND TYPE --------------
-const MiniTypePreview: React.FC<{ definition: TypeDefinition; allTypes: TypeDefinition[] }> = ({
+const MiniTypePreview: React.FC<{ definition: TypeDefinition; allTypes: TypeDefinition[]; config: AppData['config']; }> = ({
   definition,
   allTypes,
+  config,
 }) => {
   return (
     <div style={{ marginTop: '16px' }}>
@@ -241,15 +230,20 @@ const MiniTypePreview: React.FC<{ definition: TypeDefinition; allTypes: TypeDefi
 
             return (
               <Paragraph key={argKey} style={{ marginBottom: 8, color: '#e6d5c9' }}>
-                <Tag color="#9d6243">{argKey}</Tag>
+                <Tag style={{ 
+                  backgroundColor: config?.theme?.type_bg_color_2 || '#9d6243',
+                  color: config?.theme?.type_text_color || '#3a2f2a'
+                }}>
+                  {argKey}
+                </Tag>
                 :{' '}
                 {nestedType ? (
                   // If there's a nested type, show it as a hoverable link with tooltip
                   <Tooltip
                     placement="right"
-                    title={<SubTypeTooltip definition={nestedType} allTypes={allTypes} />}
-                    overlayStyle={{ backgroundColor: '#f5f0eb' }} // Set tooltip background color
-                    color='#f5f0eb'
+                    title={<SubTypeTooltip definition={nestedType} allTypes={allTypes} config={config} />}
+                    overlayStyle={{ backgroundColor: config?.theme?.type_bg_color_2 }}
+                    color = {config?.theme?.type_text_color || '#3a2f2a'}
                   >
                     <Text
                       style={{
@@ -280,11 +274,11 @@ const MiniTypePreview: React.FC<{ definition: TypeDefinition; allTypes: TypeDefi
 
 interface ApiCardProps {
   endpoint: ApiEndpoint;
-  // ------------------ ACCEPT THE `types` ARRAY HERE ------------------ //
   types: TypeDefinition[];
+  config: AppData['config'];
 }
 
-const ApiCard: React.FC<ApiCardProps> = ({ endpoint, types }) => {
+const ApiCard: React.FC<ApiCardProps> = ({ endpoint, types, config }) => {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
@@ -313,8 +307,8 @@ const ApiCard: React.FC<ApiCardProps> = ({ endpoint, types }) => {
       // If found, show your mini TypeDefinition preview
       if (foundType) {
         return (
-          <TypeDefinitionCard>
-            <TypeDetectedTag>Type: {typeInfo.typeName}</TypeDetectedTag>
+          <TypeDefinitionCard theme={config?.theme || {}}>
+            <TypeDetectedTag theme={config?.theme}>Type: {typeInfo.typeName}</TypeDetectedTag>
             {/* Optionally remove the annotation from the displayed example below */}
             <SyntaxHighlighter
               language="typescript"
@@ -332,14 +326,14 @@ const ApiCard: React.FC<ApiCardProps> = ({ endpoint, types }) => {
             </SyntaxHighlighter>
 
             {/* Render additional mini preview data about the found type */}
-            <MiniTypePreview definition={foundType} allTypes={types} />
+            <MiniTypePreview definition={foundType} allTypes={types} config={config} />
           </TypeDefinitionCard>
         );
       }
       // If not found, just show the code block without any Type preview
       return (
-        <TypeDefinitionCard>
-          <TypeDetectedTag color="error" icon={<CodeOutlined />}>
+        <TypeDefinitionCard theme={config?.theme || {}}>
+          <TypeDetectedTag theme={config?.theme} color="error" icon={<CodeOutlined />}>
             Type "{typeInfo.typeName}" not found!
           </TypeDetectedTag>
           <Paragraph style={{ whiteSpace: 'pre-wrap', color: '#fff' }}>
@@ -359,11 +353,10 @@ const ApiCard: React.FC<ApiCardProps> = ({ endpoint, types }) => {
           language="json"
           style={atomOneDark}
           customStyle={{
-            background: '#3a2f2a',
+            background: config?.theme?.code_bg_color || '#3a2f2a',
             padding: '16px',
             borderRadius: '8px',
-            margin: 0,
-            border: '1px solid #8b5d3b'
+            margin: 0
           }}
         >
           {parsedJSON}

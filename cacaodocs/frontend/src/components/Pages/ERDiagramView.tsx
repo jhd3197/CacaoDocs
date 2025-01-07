@@ -16,28 +16,8 @@ import ReactFlow, {
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import dagre from 'dagre';
+import { FieldDefinition, ERNodeData, TypeDefinition } from '../../global';
 
-export interface FieldDefinition {
-  bg_color: string;
-  color: string;
-  description: string;
-  emoji: string;
-  type: string;
-  note?: string;
-}
-
-export interface TypeDefinition {
-  function_name: string;
-  description?: string;
-  args: Record<string, FieldDefinition>;
-}
-
-// Data shape for our ER Node
-interface ERNodeData {
-  label: string;
-  description?: string;
-  fields: Record<string, FieldDefinition>;
-}
 
 // --------------------------------------------------
 // ERNode: The main node component for a type

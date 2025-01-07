@@ -19,8 +19,8 @@ import {
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json';
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
-import DocCard from '../Cards/DocCard'; // The updated DocCard
-import type { TypeItem } from '../../global'; // Update import to use TypeItem
+import DocCard from '../Cards/DocCard';
+import type { AppData, DocItem } from '../../global';
 
 const { Content } = Layout;
 const { Title, Text } = Typography;
@@ -29,36 +29,11 @@ const { TabPane } = Tabs;
 
 SyntaxHighlighter.registerLanguage('json', json);
 
-interface Returns {
-  description: string;
-  full_type: string;
-  is_list: boolean;
-  is_type_ref: boolean;
-  type_name: string;
-}
-
-interface DocItem {
-  args?: Record<string, any>;
-  description?: string;
-  function_name: string;
-  method?: string;
-  returns?: Returns;
-  status?: string;
-  tag: string;
-  type: string;
-  version?: string;
-  function_source?: string;
-  inputs?: string[];
-  outputs?: string | null;
-}
-
-// ---------------------- NEW: Accept the `types` array here ---------------------- //
 interface DocsProps {
-  data: DocItem[];
-  types: TypeItem[]; // Change TypeDefinition to TypeItem
+  data: AppData;
 }
 
-const Docs: React.FC<DocsProps> = ({ data, types }) => {
+const Docs: React.FC<DocsProps> = ({ data }) => {
   const [docsData, setDocsData] = useState<DocItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -73,7 +48,7 @@ const Docs: React.FC<DocsProps> = ({ data, types }) => {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
   useEffect(() => {
-    setDocsData(data);
+    setDocsData(data.docs);
     setLoading(false);
   }, [data]);
 
@@ -233,11 +208,7 @@ const Docs: React.FC<DocsProps> = ({ data, types }) => {
           <div>
             {filteredData.map(doc => (
               <div id={`doc-${doc.function_name}`} key={doc.function_name}>
-                {/*
-                  Pass `types` into DocCard just like we do with ApiCard,
-                  so it can do the sub-type tooltip logic:
-                */}
-                <DocCard doc={doc} types={types} />
+                <DocCard doc={doc} types={data.types} />
               </div>
             ))}
           </div>
@@ -254,7 +225,7 @@ const Docs: React.FC<DocsProps> = ({ data, types }) => {
   };
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: '100vh', background: data.config?.theme.bg_color || '#fff' }}>
       <Content style={{ padding: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
           <Space>
