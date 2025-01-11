@@ -1,9 +1,14 @@
 # CacaoDocs Configuration
 title: "Welcome to CacaoDocs Dashboard"
 description: "Manage and explore your documentation with ease"
-footer_text: "Made with CacaoDocs\n&#10084;"
+footer_text: "Made with CacaoDocs</br>&#x2764;"
 github_url: "https://github.com/jhd3197/CacaoDocs"
 version: "1.0.0"
+google_analytics_id: "G-4M2G9F5MMW"
+clarity_id: "ps9ys0le9n"
+
+# Logo configuration
+logo_url: ""
 
 # Theme Settings 
 theme:
@@ -39,8 +44,6 @@ theme:
   type_bg_color_2: "#6f4e3740"                  # Milk Chocolate with 25% Opacity
   type_text_color: "#3d1c02"                    # Dark Cocoa
 
-# Logo configuration
-logo_url: ""
 
 # Type mappings (how types are displayed in the UI)
 type_mappings:

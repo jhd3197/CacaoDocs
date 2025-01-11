@@ -83,7 +83,9 @@ export interface DocItem {
 interface Config {
     description: string;
     exclude_inputs: string[];
+    footer_text: string;
     logo_url: string;
+    github_url: string;
     tag_mappings: Record<string, string>;
     theme: {
         primary_color: string;
@@ -114,6 +116,8 @@ interface Config {
     type_mappings: Record<string, string>;
     verbose: boolean;
     version: string;
+    google_analytics_id: string;
+    clarity_id: string;
 }
 
 export interface AppData {

@@ -21,6 +21,8 @@ CacaoDocs is still under development. It doesn't feature many customization opti
 - **API Status Tracking**: Display the current status of each API endpoint, indicating whether it's under development or in production. 🛠️🔄
 - **ER Diagram for the Types Page**: Visual representation of the data models and their relationships within the Types documentation. 📊📚
 - **Recent Changes View Based on "Last Updated"**: Easily view the latest updates and modifications to your documentation based on the "Last Updated" timestamps. 🕒🔍
+- **Analytics Integration**: Track documentation usage with Google Analytics 4 and Microsoft Clarity. 📊🔍
+- **Usage Insights**: Understand how users interact with your documentation through heatmaps and session recordings. 👥📈
 
 ## 🚀 Upcoming Features
 - **AI-Powered Documentation**: Leverage OpenAI to generate custom, intelligent documentation tailored to your codebase. 🤖📝✨

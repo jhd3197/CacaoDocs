@@ -6,14 +6,19 @@ import Home from './components/Pages/Home';
 import Api from './components/Pages/Api';
 import Types from './components/Pages/Types';
 import Docs from './components/Pages/Docs';
+import GoogleAnalytics from './components/GoogleAnalytics';
+import Clarity from './components/Clarity';
 
 import type { AppData } from './global';
 
 // Define a valid defaultConfig
 const defaultConfig = {
-  description: '',
+  title: 'Welcome to CacaoDocs Dashboard',
+  description: 'Manage and explore your documentation with ease"',
   exclude_inputs: [],
   logo_url: '',
+  github_url: '',
+  footer_text: '',
   tag_mappings: {},
   theme: {
     primary_color: '#FF8C00',
@@ -40,10 +45,11 @@ const defaultConfig = {
     type_bg_color_2: '#e0e7ff',
     type_text_color: '#1a202c',
   },
-  title: 'Default title',
   type_mappings: {},
   verbose: false,
   version: '0.0.0',
+  google_analytics_id: '',
+  clarity_id: '',
 };
 
 const App: React.FC = () => {
@@ -132,6 +138,12 @@ const App: React.FC = () => {
         },
       }}
     >
+      {apiData.config.google_analytics_id && (
+        <GoogleAnalytics measurementId={apiData.config.google_analytics_id} />
+      )}
+      {apiData.config.clarity_id && (
+        <Clarity clarityId={apiData.config.clarity_id} />
+      )}
       <Router>
         <CustomLayout apiData={apiData}>
           <Routes>

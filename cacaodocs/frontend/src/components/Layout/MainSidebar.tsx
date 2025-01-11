@@ -38,7 +38,7 @@ const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
             }}>
                 <Image
                     src={logoSource}
-                    alt="CacaoDocs Logo"
+                    alt="Logo"
                     preview={false}
                     style={{
                         width: '100%',
@@ -76,21 +76,26 @@ const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
                 borderTop: '1px solid rgba(0, 0, 0, 0.06)',
                 textAlign: 'center'
             }}>
-                <a 
-                    href="https://github.com/jhd3197/CacaoDocs" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    style={{ fontSize: '24px', color: 'inherit' }}
-                >
-                    <GithubOutlined />
-                </a>
-                <div style={{ 
-                    marginTop: '8px',
-                    fontSize: '12px',
-                    color: 'rgba(0, 0, 0, 0.45)'
-                }}>
-                    Made with CacaoDocs ❤️
-                </div>
+                {apiData.config.github_url && (
+                    <a 
+                        href={apiData.config.github_url}
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        style={{ fontSize: '24px', color: 'inherit' }}
+                    >
+                        <GithubOutlined />
+                    </a>
+                )}
+                {apiData.config.footer_text && (
+                    <div 
+                        style={{ 
+                            marginTop: '8px',
+                            fontSize: '12px',
+                            color: 'rgba(0, 0, 0, 0.45)'
+                        }}
+                        dangerouslySetInnerHTML={{ __html: apiData.config.footer_text }}
+                    />
+                )}
             </div>
         </div>
     );
