@@ -15,7 +15,9 @@ CacaoDocs is still under development. It doesn't feature many customization opti
 - **`doc_type="docs"`**: General documentation for your classes and methods (e.g., core logic or utility functions). 📝🔧
 - **Live Preview**: Instantly see your documentation changes in real-time as you code. 👀🔄
 - **Multiple Output Formats**: Generate docs in various formats like HTML & Json. 📄📱💻
-- **Search Functionality**: Easily find what you need within your documentation with built-in search. 🔍📑
+- **Global Search Functionality with FlexSearch**: Easily find what you need within your documentation with built-in search. 🔍📑
+  <img width="336" alt="image" src="https://github.com/user-attachments/assets/21c8e836-5ec6-4364-9fb7-56ff8afeecd3" />
+
 - **Link Generation**: Automatically create links between different parts of your documentation for easy navigation. 🔗🗺️
 - **Code Snippet Copying**: Easily copy code examples from your documentation with a single click. 📋💻
 - **API Status Tracking**: Display the current status of each API endpoint, indicating whether it's under development or in production. 🛠️🔄
