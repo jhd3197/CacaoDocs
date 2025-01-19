@@ -57,3 +57,18 @@ tag_mappings:
   models: "Models"
   auth: "Authentication"
   general: "General"
+
+# Pages
+pages:
+  - title: "Home"
+    page: "home.md"
+    type: "page"
+  - title: "API"
+    page: "api.md"
+    type: "api"
+  - title: "Types"
+    page: "types.md"
+    type: "types"
+  - title: "Docs"
+    page: "docs.md"
+    type: "docs"

@@ -1,3 +1,16 @@
+.ant-menu,
+.ant-menu-sub,
+.ant-menu-inline {
+    background: transparent !important;
+}
+
+.ant-menu-submenu-popup {
+    background: transparent !important;
+}
+
+.ant-menu-submenu > .ant-menu {
+    background: transparent !important;
+}
 
 /*
 .custom-dark-menu,

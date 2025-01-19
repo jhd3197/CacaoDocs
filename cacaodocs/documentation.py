@@ -464,6 +464,7 @@ class CacaoDocs:
                 one_of_each[key] = items
             else:
                 one_of_each[key] = items[0] if items else None
+        one_of_each["configs"] = cls._config
         return one_of_each
 
     @classmethod
@@ -475,6 +476,7 @@ class CacaoDocs:
                 two_of_each[key] = items
             else:
                 two_of_each[key] = items[:2] if len(items) >= 2 else items
+        two_of_each["configs"] = cls._config
         return two_of_each
 
     @classmethod
@@ -483,6 +485,7 @@ class CacaoDocs:
         four_of_each = {}
         for key, items in cls._registry.items():
             four_of_each[key] = items[:4] if len(items) >= 4 else items
+        four_of_each["configs"] = cls._config
         return four_of_each
 
     @classmethod

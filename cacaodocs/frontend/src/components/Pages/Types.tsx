@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Table, Spin, Tag, Layout, Switch, Space, Input, Select, Button } from 'antd';
 import { TableOutlined, AppstoreOutlined } from '@ant-design/icons';
-import TypeCard from './TypeCard';
+import { useLocation } from 'react-router-dom';
+import TypeCard from '../Cards/TypeCard';
 import ERDiagramView from './ERDiagramView';
 import type { AppData, TypeItem } from '../../global';
 
@@ -18,11 +19,49 @@ const Types: React.FC<TypesProps> = ({ data }) => {
   const [searchText, setSearchText] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [typesData, setTypesData] = useState<TypeItem[]>([]);
+  const location = useLocation();
 
   useEffect(() => {
-    setTypesData(data.types);
-    setLoading(false);
-  }, [data]);
+    if (data && data.types) {
+      setTypesData(data.types);
+      setLoading(false);
+
+      // Get hash and remove the initial "/types" part if present
+      const hash = decodeURIComponent(location.hash)
+        .replace('#/types#', '')
+        .replace('#', '');
+
+      if (hash) {
+        // Wait for component to fully render
+        const scrollToElement = () => {
+          const element = document.getElementById(`type-${hash}`);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Add a highlight effect
+            element.style.backgroundColor = 'rgba(255, 140, 0, 0.1)'; // Light orange highlight
+            setTimeout(() => {
+              element.style.transition = 'background-color 0.5s ease';
+              element.style.backgroundColor = 'transparent';
+            }, 1000);
+          }
+        };
+
+        // Try multiple times in case of dynamic content loading
+        setTimeout(scrollToElement, 100);
+        setTimeout(scrollToElement, 500);
+        setTimeout(scrollToElement, 1000);
+      }
+    }
+  }, [data, location.hash]);
+
+  const handleTypeSelect = (typeName: string) => {
+    const element = document.getElementById(`type-${typeName}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Removed URL update to prevent route change
+      // window.history.replaceState(null, '', `#/types#${encodedTypeName}`);
+    }
+  };
 
   // Optional: If you need a type definition generator
   // or any additional transformations, you can do so below.
@@ -133,8 +172,14 @@ const Types: React.FC<TypesProps> = ({ data }) => {
         {viewMode === 'card' ? (
           <div>
             {filteredData.map(type => (
-              <div id={`type-${type.function_name}`} key={type.function_name}>
-                <TypeCard type={type} />
+              <div 
+                id={`type-${type.function_name}`} 
+                key={type.function_name}
+                style={{ transition: 'background-color 0.5s ease' }}
+              >
+                <TypeCard 
+                  type={type} 
+                />
               </div>
             ))}
           </div>

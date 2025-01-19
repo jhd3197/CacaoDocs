@@ -8,6 +8,7 @@ import Types from './components/Pages/Types';
 import Docs from './components/Pages/Docs';
 import GoogleAnalytics from './components/GoogleAnalytics';
 import Clarity from './components/Clarity';
+import GlobalSearch from './components/Search/GlobalSearch';
 
 import type { AppData } from './global';
 
@@ -146,6 +147,7 @@ const App: React.FC = () => {
       )}
       <Router>
         <CustomLayout apiData={apiData}>
+          <GlobalSearch data={apiData} />
           <Routes>
             <Route path="/" element={<Home data={apiData} />} />
             <Route path="/api" element={<Api data={apiData} />} />

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Card,
   Tag,
@@ -280,6 +280,21 @@ interface ApiCardProps {
 
 const ApiCard: React.FC<ApiCardProps> = ({ endpoint, types, config }) => {
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (window.location.hash) {
+      const hash = decodeURIComponent(window.location.hash.replace('#/api#', ''));
+      const elementId = `${endpoint.endpoint}-${endpoint.method}`;
+      if (hash === elementId) {
+        const element = document.getElementById(elementId);
+        if (element) {
+          setTimeout(() => {
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }, 100);
+        }
+      }
+    }
+  }, [endpoint.endpoint, endpoint.method]);
 
   const handleCopy = () => {
     navigator.clipboard

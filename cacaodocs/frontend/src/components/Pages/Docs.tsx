@@ -47,16 +47,64 @@ const Docs: React.FC<DocsProps> = ({ data }) => {
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
 
+  // Add new state for highlighted doc
+  const [highlightedDoc, setHighlightedDoc] = useState<string | null>(null);
+
   useEffect(() => {
     setDocsData(data.docs);
     setLoading(false);
+
+    // Handle initial URL hash
+    const fullHash = window.location.hash;
+    const functionHash = fullHash.split('#').pop(); // Get the last part after #
+    
+    if (functionHash && functionHash !== 'docs') {
+      // Add a longer delay to ensure the content is fully rendered
+      setTimeout(() => {
+        handleSelectDoc(functionHash);
+      }, 100);
+    }
+
+    // Listen for hash changes
+    const handleHashChange = () => {
+      const newHash = window.location.hash.split('#').pop();
+      if (newHash && newHash !== 'docs') {
+        handleSelectDoc(newHash);
+      }
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, [data]);
 
-  // (Optional) Scroll or highlight functionality
+  // Update scroll and highlight functionality
   const handleSelectDoc = (functionName: string) => {
-    const element = document.getElementById(`doc-${functionName}`);
+    const cleanFunctionName = functionName.replace(/[()]/g, ''); // Remove parentheses if present
+    const element = document.getElementById(`doc-${cleanFunctionName}`);
+    
     if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      // Add offset for any fixed headers
+      const offset = 80; // Adjust this value based on your header height
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - offset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+      
+      setHighlightedDoc(cleanFunctionName);
+      
+      // Update URL hash without triggering a new scroll
+      const newHash = `#/docs#${cleanFunctionName}`;
+      if (window.location.hash !== newHash) {
+        window.history.pushState(null, '', newHash);
+      }
+
+      // Remove highlight after animation
+      setTimeout(() => {
+        setHighlightedDoc(null);
+      }, 2000);
     }
   };
 
@@ -207,7 +255,16 @@ const Docs: React.FC<DocsProps> = ({ data }) => {
         {viewMode === 'card' ? (
           <div>
             {filteredData.map(doc => (
-              <div id={`doc-${doc.function_name}`} key={doc.function_name}>
+              <div 
+                id={`doc-${doc.function_name}`} 
+                key={doc.function_name}
+                style={{
+                  transition: 'background-color 0.3s ease',
+                  backgroundColor: highlightedDoc === doc.function_name ? '#ffecc7' : 'transparent',
+                  padding: '8px',
+                  borderRadius: '8px',
+                }}
+              >
                 <DocCard doc={doc} types={data.types} />
               </div>
             ))}

@@ -1,12 +1,13 @@
 import React from 'react';
-import { Menu, Typography, Image } from 'antd';
+import { Menu, Typography, Image, Button } from 'antd';
 import { Link, useLocation } from 'react-router-dom';
 import { 
     HomeOutlined, 
     ApiOutlined, 
     BlockOutlined, 
     FileTextOutlined,
-    GithubOutlined
+    GithubOutlined,
+    SearchOutlined
 } from '@ant-design/icons';
 import logo from '../../assets/img/logo.png';
 
@@ -23,6 +24,17 @@ const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
     const location = useLocation();
     const logoSource = apiData.config.logo_url || logo;
 
+    const triggerSearch = () => {
+        // Simulate Ctrl+K keyboard event
+        const event = new KeyboardEvent('keydown', {
+            key: 'k',
+            code: 'KeyK',
+            ctrlKey: true,
+            bubbles: true
+        });
+        document.dispatchEvent(event);
+    };
+
     return (
         <div style={{ 
             padding: '16px 0',
@@ -32,7 +44,7 @@ const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
         }}>
             <div style={{ 
                 padding: '0 24px', 
-                marginBottom: '24px',
+                marginBottom: '16px',
                 display: 'flex',
                 alignItems: 'center',
             }}>
@@ -41,11 +53,30 @@ const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
                     alt="Logo"
                     preview={false}
                     style={{
-                        width: '100%',
+                        maxWidth: '100%', // Make logo responsive
                         objectFit: 'contain'
                     }}
                 />
             </div>
+            
+            <Button 
+                style={{ 
+                    margin: '0 24px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                }}
+                onClick={triggerSearch}
+                icon={<SearchOutlined />}
+            >
+                <span style={{ marginRight: 'auto', marginLeft: 8 }}>Search</span>
+                <span style={{ 
+                    opacity: 0.5,
+                    fontSize: '12px',
+                    marginLeft: 8 
+                }}>⌃K</span>
+            </Button>
+
             <Menu
                 mode="inline"
                 selectedKeys={[location.pathname]}

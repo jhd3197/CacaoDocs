@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Table, Spin, Tag, Card, Switch, Space, Input, Select, Typography, Tabs, Layout } from 'antd';
 import { TableOutlined, AppstoreOutlined, SearchOutlined } from '@ant-design/icons';
 import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json';
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { useLocation, useNavigate } from 'react-router-dom';
 import type { AppData } from '../../global';
 import ApiCard from '../Cards/ApiCard';
 
@@ -28,18 +29,64 @@ const Api: React.FC<ApiProps> = ({ data }) => {
   const [selectedResponseCodes, setSelectedResponseCodes] = useState<string[]>([]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
 
+  const navigate = useNavigate();
+  const location = useLocation();
+
   useEffect(() => {
-    console.log('Api component received data:', data);
     if (data && data.api) {
       setLoading(false);
     }
   }, [data]);
 
-  const handleEndpointSelect = (endpoint: string) => {
-    const element = document.getElementById(`api-${endpoint}`);
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  const scrollToElement = useCallback((hash: string) => {
+    const cleanHash = decodeURIComponent(hash.replace(/^#\/api#|^#\/api|^#/, ''));
+    console.log('Attempting to scroll to:', cleanHash);
+
+    const findAndScroll = (retries = 5) => {
+      const element = document.getElementById(cleanHash);
+      console.log('Found element:', element);
+      
+      if (element) {
+        setTimeout(() => {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.style.backgroundColor = 'rgba(255, 140, 0, 0.1)';
+          element.style.transition = 'background-color 1s ease';
+          setTimeout(() => {
+            element.style.backgroundColor = 'transparent';
+          }, 2000);
+        }, 150);
+      } else if (retries > 0) {
+        setTimeout(() => findAndScroll(retries - 1), 200);
+      }
+    };
+
+    findAndScroll();
+  }, []);
+
+  useEffect(() => {
+    if (!loading && data?.api) {
+      const handleNavigation = (event?: CustomEvent) => {
+        const hash = event?.detail?.hash || location.hash;
+        if (hash) {
+          scrollToElement(hash);
+        }
+      };
+
+      window.addEventListener('navigationRequest' as any, handleNavigation);
+      
+      if (location.hash) {
+        handleNavigation();
+      }
+
+      return () => {
+        window.removeEventListener('navigationRequest' as any, handleNavigation);
+      };
     }
+  }, [loading, data, location.hash, scrollToElement]);
+
+  const handleEndpointSelect = (endpoint: string) => {
+    const hash = `/api/${endpoint}`;
+    navigate(`#${hash}`, { replace: true });
   };
 
   const methodColors: Record<string, string> = {
@@ -98,7 +145,6 @@ const Api: React.FC<ApiProps> = ({ data }) => {
     },
   ];
 
-  // Ensure data is an array before extracting unique values
   const uniqueMethods = Array.isArray(data.api)
     ? Array.from(new Set(data.api.map((item) => item.method)))
     : [];
@@ -112,14 +158,13 @@ const Api: React.FC<ApiProps> = ({ data }) => {
         )
       )
     : [];
-  const uniqueStatuses = Array.isArray(data.api)  // Add this block
+  const uniqueStatuses = Array.isArray(data.api)
     ? Array.from(new Set(data.api.map((item) => item.status)))
     : [];
 
   const filterData = (items: typeof data.api) => {
     if (!Array.isArray(items)) return [];
     
-    // Create a single filtered array instead of chaining filters
     return items.filter((item) => {
       const searchLower = searchText.toLowerCase();
       const matchesSearch =
@@ -155,7 +200,6 @@ const Api: React.FC<ApiProps> = ({ data }) => {
     });
   };
 
-  // Simplify the filteredData calculation
   const filteredData = React.useMemo(() => {
     const baseData = selectedEndpoint
       ? data?.api?.filter((item) => item.endpoint === selectedEndpoint)
@@ -164,7 +208,7 @@ const Api: React.FC<ApiProps> = ({ data }) => {
   }, [data, selectedEndpoint, searchText, selectedMethods, selectedVersions, selectedStatuses, selectedResponseCodes]);
 
   const renderContent = () => {
-    if (loading) return <Spin />;
+    if (loading) return <Spin size="large" />;
 
     return (
       <div style={{ width: '100%' }}>
@@ -221,14 +265,23 @@ const Api: React.FC<ApiProps> = ({ data }) => {
 
         {viewMode === 'card' ? (
           <div>
-            {filteredData.map((endpoint) => (
-              <div 
-                id={`api-${endpoint.endpoint}`} 
-                key={`${endpoint.endpoint}-${endpoint.method}-${endpoint.version}`}
-              >
-                <ApiCard endpoint={endpoint} types={data.types} config={data.config} />
-              </div>
-            ))}
+            {filteredData.map((endpoint) => {
+              const elementId = `${endpoint.endpoint}-${endpoint.method}`;
+              return (
+                <div 
+                  id={elementId}
+                  key={elementId}
+                  style={{ 
+                    transition: 'background-color 1s ease',
+                    scrollMarginTop: '80px',
+                    marginBottom: '20px',
+                    scrollBehavior: 'smooth'
+                  }}
+                >
+                  <ApiCard endpoint={endpoint} types={data.types} config={data.config} />
+                </div>
+              );
+            })}
           </div>
         ) : (
           <Table
