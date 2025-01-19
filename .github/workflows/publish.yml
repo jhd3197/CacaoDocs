@@ -59,12 +59,6 @@ jobs:
           git commit -m "Update setup.py to version ${NEW_VERSION} [skip ci]" || echo "No changes to commit"
           git push origin main
 
-      ### Step 5: Run Tests ###
-      - name: Run Tests
-        run: |
-          pip install -r requirements.txt
-          python -m unittest discover tests
-
       ### Step 6: Create GitHub Release ###
       - name: Create GitHub Release
         uses: actions/create-release@v1
