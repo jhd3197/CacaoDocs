@@ -121,14 +121,24 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ data }) => {
     setVisible(false);
     
     setTimeout(() => {
-      // Extract the endpoint type from item.type
       const endpointType = item.type === 'api' ? 'api' : 
                           item.type === 'type' ? 'types' : 'docs';
       
-      // Clean up any existing prefixes and add the correct one
       const targetHash = item.path.split('#').slice(1).join('#');
       const cleanHash = targetHash.replace(/^\/(?:api|types|docs)#/, '');
-      const newPath = `/#/${endpointType}#${cleanHash}`;
+      
+      // Check if we're on GitHub Pages
+      const isGitHubPages = window.location.hostname.includes('.github.io');
+      let basePath = '';
+      
+      if (isGitHubPages) {
+        // Extract repository name from pathname
+        const pathParts = window.location.pathname.split('/');
+        const repoName = pathParts[1]; // This will be 'CacaoDocs' in your case
+        basePath = `/${repoName}`;
+      }
+      
+      const newPath = `${basePath}/#/${endpointType}#${cleanHash}`;
       
       // Use replace instead of pushState for more reliable hash changes
       window.location.replace(newPath);
