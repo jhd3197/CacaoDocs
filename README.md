@@ -16,6 +16,7 @@ CacaoDocs is still under development. It doesn't feature many customization opti
 - **Live Preview**: Instantly see your documentation changes in real-time as you code. 👀🔄
 - **Multiple Output Formats**: Generate docs in various formats like HTML & Json. 📄📱💻
 - **Global Search Functionality with FlexSearch**: Easily find what you need within your documentation with built-in search. 🔍📑
+
   <img width="336" alt="image" src="https://github.com/user-attachments/assets/21c8e836-5ec6-4364-9fb7-56ff8afeecd3" />
 
 - **Link Generation**: Automatically create links between different parts of your documentation for easy navigation. 🔗🗺️
