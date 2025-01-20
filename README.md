@@ -6,6 +6,10 @@ I created CacaoDocs because I wanted a simple and beautiful way to produce docum
 
 With CacaoDocs, you can focus more on your code and less on documentation setup, making your development workflow smoother and more enjoyable! 🚀🔍
 
+## 🌍 Links
+- 📦 **PyPI:** [CacaoDocs on PyPI](https://pypi.org/project/cacaodocs/)
+- 🌐 **Docs:** [CacaoDocs GitHub Pages](https://jhd3197.github.io/CacaoDocs/)
+
 ## 🚧 Note
 CacaoDocs is still under development. It doesn't feature many customization options yet, and you might encounter limitations. Don't expect a fully functional package out of the box—but feel free to contribute and help improve it! 🤝✨
 
