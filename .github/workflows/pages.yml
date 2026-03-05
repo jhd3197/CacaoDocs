@@ -34,7 +34,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -e .
-          pip install cacao
+          pip install cacao>=2.0.9
 
       - name: Build docs
         run: cacaodocs build ./docs -o ./_build
