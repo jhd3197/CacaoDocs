@@ -187,6 +187,16 @@ def build_json(
     api_endpoints = [f for f in all_functions if f["doc_type"] == "api"]
     regular_functions = [f for f in all_functions if f["doc_type"] != "api"]
 
+    # Apply page_order from config if provided
+    page_order = config.get("page_order", [])
+    if page_order:
+        order_map = {slug: i for i, slug in enumerate(page_order)}
+        pages = sorted(pages, key=lambda p: (
+            order_map.get(p.slug, len(page_order)),
+            p.order,
+            p.title,
+        ))
+
     return {
         "modules": [_serialize_module(m) for m in modules],
         "classes": all_classes,
@@ -195,6 +205,151 @@ def build_json(
         "pages": [_serialize_page(p) for p in pages],
         "config": config,
     }
+
+
+def _chunk_documentation(json_data: dict[str, Any]) -> list[dict[str, str]]:
+    """Convert documentation JSON into text chunks for embedding.
+
+    Each chunk has: text, source (identifier), type (function/class/api/page).
+    """
+    chunks: list[dict[str, str]] = []
+
+    for func in json_data.get("functions", []):
+        ds = func.get("docstring", {})
+        parts = [f"Function: {func['name']}"]
+        if func.get("signature"):
+            parts[0] += func["signature"]
+        if ds.get("summary"):
+            parts.append(ds["summary"])
+        if ds.get("description"):
+            parts.append(ds["description"])
+        for arg in ds.get("args", []):
+            parts.append(f"  param {arg['name']}: {arg.get('type', '')} - {arg.get('description', '')}")
+        ret = ds.get("returns")
+        if ret:
+            parts.append(f"  returns: {ret.get('type', '')} - {ret.get('description', '')}")
+        for ex in ds.get("examples", []):
+            parts.append(f"  example: {ex}")
+        chunks.append({
+            "text": "\n".join(parts),
+            "source": func.get("full_path", func["name"]),
+            "type": "function",
+        })
+
+    for ep in json_data.get("api_endpoints", []):
+        ds = ep.get("docstring", {})
+        method = ds.get("http_method", "")
+        path = ds.get("path", "")
+        parts = [f"API: {method} {path}"]
+        if ds.get("summary"):
+            parts.append(ds["summary"])
+        if ds.get("description"):
+            parts.append(ds["description"])
+        for param in ds.get("path_params", []) + ds.get("query_params", []):
+            parts.append(f"  param {param['name']}: {param.get('type', '')} - {param.get('description', '')}")
+        chunks.append({
+            "text": "\n".join(parts),
+            "source": f"{method} {path}" if method else ep.get("full_path", ep["name"]),
+            "type": "api",
+        })
+
+    for cls in json_data.get("classes", []):
+        ds = cls.get("docstring", {})
+        parts = [f"Class: {cls['name']}"]
+        if ds.get("summary"):
+            parts.append(ds["summary"])
+        if ds.get("description"):
+            parts.append(ds["description"])
+        for attr in ds.get("attributes", []):
+            parts.append(f"  attr {attr['name']}: {attr.get('type', '')} - {attr.get('description', '')}")
+        for m in cls.get("methods", []):
+            mds = m.get("docstring", {})
+            parts.append(f"  method {m['name']}: {mds.get('summary', '')}")
+        chunks.append({
+            "text": "\n".join(parts),
+            "source": cls.get("full_path", cls["name"]),
+            "type": "class",
+        })
+
+    for page in json_data.get("pages", []):
+        # Split long pages into ~2000 char paragraphs
+        content = page.get("content", "")
+        # Strip HTML tags for embedding
+        import re
+        clean = re.sub(r"<[^>]+>", " ", content)
+        clean = re.sub(r"\s+", " ", clean).strip()
+        if not clean:
+            continue
+        # Chunk long pages
+        max_chunk = 2000
+        if len(clean) <= max_chunk:
+            chunks.append({
+                "text": f"Page: {page['title']}\n{clean}",
+                "source": page["title"],
+                "type": "page",
+            })
+        else:
+            sentences = clean.split(". ")
+            current = f"Page: {page['title']}\n"
+            for sent in sentences:
+                if len(current) + len(sent) > max_chunk:
+                    chunks.append({
+                        "text": current.strip(),
+                        "source": page["title"],
+                        "type": "page",
+                    })
+                    current = f"Page: {page['title']} (cont.)\n"
+                current += sent + ". "
+            if current.strip():
+                chunks.append({
+                    "text": current.strip(),
+                    "source": page["title"],
+                    "type": "page",
+                })
+
+    return chunks
+
+
+def _embed_chunks(
+    chunks: list[dict[str, str]], embedding_model: str
+) -> dict[str, Any] | None:
+    """Embed text chunks using Prompture's embedding driver.
+
+    Returns the embeddings dict, or None if embedding fails.
+    """
+    if not chunks:
+        return None
+
+    try:
+        from prompture.drivers.embedding_registry import get_embedding_driver_for_model
+    except ImportError:
+        return None
+
+    try:
+        driver = get_embedding_driver_for_model(embedding_model)
+        texts = [c["text"] for c in chunks]
+        result = driver.embed(texts, {})
+        embeddings = result.get("embeddings", [])
+        if not embeddings:
+            return None
+
+        return {
+            "model": embedding_model,
+            "dimensions": result.get("meta", {}).get("dimensions", len(embeddings[0])),
+            "chunks": [
+                {
+                    "text": chunks[i]["text"],
+                    "source": chunks[i]["source"],
+                    "type": chunks[i]["type"],
+                    "embedding": embeddings[i],
+                }
+                for i in range(len(chunks))
+            ],
+        }
+    except Exception as e:
+        import logging
+        logging.getLogger("cacaodocs").warning("Embedding failed: %s", e)
+        return None
 
 
 def _is_light_color(hex_color: str) -> bool:
@@ -230,6 +385,470 @@ def _generate_app_code(json_data: dict[str, Any]) -> str:
                    if k not in ("custom_doc_types",)}
     safe_data = {**json_data, "config": safe_config}
     data_json = json.dumps(safe_data, ensure_ascii=False, default=str)
+
+    # Chat configuration
+    chat_enabled = config.get("chat", False)
+    chat_config = config.get("chat_config", {})
+    chat_default_model = chat_config.get("default_model", "openai/gpt-4o-mini")
+    chat_models = chat_config.get("models", [
+        "openai/gpt-4o-mini",
+        "openai/gpt-4o",
+        "claude/claude-sonnet-4-20250514",
+        "groq/llama-3.1-8b-instant",
+        "ollama/llama3.1:8b",
+    ])
+    embedding_model = chat_config.get("embedding_model", "openai/text-embedding-3-small")
+    top_k = chat_config.get("top_k", 5)
+    chat_system_prompt = chat_config.get("system_prompt",
+        f"You are a helpful assistant that answers questions about the {title} library. "
+        "Be concise and reference specific functions, classes, or modules when relevant."
+    )
+
+    if chat_enabled:
+        _chat_state_block = f'''# --- Chat State ---
+_chat_api_key = c.signal("", name="chat_api_key")
+_chat_model = c.signal({chat_default_model!r}, name="chat_model")
+_chat_system_prompt = c.signal({chat_system_prompt!r}, name="chat_system_prompt")
+_chat_messages = c.signal([], name="chat_messages")
+_show_chat = c.signal(False, name="show_chat")
+
+c.bind("update_chat_api_key", _chat_api_key)
+c.bind("update_chat_model", _chat_model)
+c.bind("update_chat_system_prompt", _chat_system_prompt)'''
+
+        _chat_nav_item = ""
+
+        _chat_panel_block = f'''
+        # --- Chat (Floating Bubble + Modal) ---
+        with c.modal(title="Ask about {title}", signal=_show_chat, size="lg"):
+            c.input("API Key", signal=_chat_api_key, type="password",
+                    placeholder="sk-... (optional for Ollama)",
+                    on_change="update_chat_api_key")
+            with c.row(gap=3):
+                c.select("Model", options={chat_models!r},
+                         signal=_chat_model, on_change="update_chat_model")
+            c.spacer(2)
+            c.chat(
+                signal=_chat_messages,
+                on_send="chat_send",
+                on_clear="chat_clear",
+                height="400px",
+                show_clear=True,
+                persist=True,
+                placeholder="Ask about functions, classes, usage...",
+            )
+        c.html(\'\'\'<style>
+.cacaodocs-fab {{
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--c-primary, #6366f1);
+    color: white;
+    border: none;
+    cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+    transition: transform 0.2s, box-shadow 0.2s;
+}}
+.cacaodocs-fab:hover {{
+    transform: scale(1.08);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+}}
+.cacaodocs-fab svg {{
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}}
+</style>
+<button class="cacaodocs-fab" onclick="window.dispatchEvent(new CustomEvent(\'cacao:signal\', {{detail: {{name: \'show_chat\', value: true}}}}));" aria-label="Open chat">
+    <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+</button>\'\'\')'''
+
+        # Generate the static JavaScript for RAG + LLM chat
+        _chat_static_script = '''
+// --- CacaoDocs AI Chat (RAG + LLM) ---
+(function() {
+  const EMBEDDING_MODEL = ''' + json.dumps(embedding_model) + ''';
+  const TOP_K = ''' + str(top_k) + ''';
+  const SYSTEM_PROMPT = ''' + json.dumps(chat_system_prompt) + ''';
+
+  let _embeddings = null;
+  let _embeddingsLoading = false;
+  let _ollamaAvailable = null; // null = unknown, true/false after check
+
+  // Check if Ollama is running locally
+  async function checkOllama() {
+    if (_ollamaAvailable !== null) return _ollamaAvailable;
+    try {
+      const resp = await fetch('http://localhost:11434/api/tags', {signal: AbortSignal.timeout(2000)});
+      _ollamaAvailable = resp.ok;
+    } catch {
+      _ollamaAvailable = false;
+    }
+    return _ollamaAvailable;
+  }
+
+  // Load embeddings on demand
+  async function loadEmbeddings() {
+    if (_embeddings) return _embeddings;
+    if (_embeddingsLoading) {
+      while (_embeddingsLoading) await new Promise(r => setTimeout(r, 50));
+      return _embeddings;
+    }
+    _embeddingsLoading = true;
+    try {
+      const base = window.__CACAO_BASE_PATH__ || '.';
+      const resp = await fetch(base + '/embeddings.json');
+      if (resp.ok) {
+        _embeddings = await resp.json();
+      }
+    } catch (e) {
+      console.warn('[CacaoDocs] Could not load embeddings:', e);
+    }
+    _embeddingsLoading = false;
+    return _embeddings;
+  }
+
+  // --- Keyword search (always works, no API needed) ---
+  function keywordSearch(query, chunks, topK) {
+    const words = query.toLowerCase().split(/\\s+/).filter(w => w.length > 2);
+    if (!words.length || !chunks.length) return [];
+
+    const scored = chunks.map(chunk => {
+      const text = chunk.text.toLowerCase();
+      let score = 0;
+      for (const w of words) {
+        // Count occurrences, weight exact word matches higher
+        const regex = new RegExp('\\\\b' + w.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'), 'gi');
+        const matches = (text.match(regex) || []).length;
+        score += matches * 2;
+        // Partial matches
+        if (text.includes(w)) score += 1;
+      }
+      // Boost if source/type matches a query word
+      const src = (chunk.source || '').toLowerCase();
+      for (const w of words) {
+        if (src.includes(w)) score += 3;
+      }
+      return {score, text: chunk.text, source: chunk.source, type: chunk.type};
+    });
+
+    return scored.filter(s => s.score > 0).sort((a, b) => b.score - a.score).slice(0, topK);
+  }
+
+  // --- Vector search (needs embedding API) ---
+  function cosineSim(a, b) {
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < a.length; i++) {
+      dot += a[i] * b[i];
+      na += a[i] * a[i];
+      nb += b[i] * b[i];
+    }
+    na = Math.sqrt(na);
+    nb = Math.sqrt(nb);
+    return (na && nb) ? dot / (na * nb) : 0;
+  }
+
+  async function embedQuery(text, apiKey) {
+    const parts = EMBEDDING_MODEL.split('/');
+    const provider = parts[0];
+    const model = parts.slice(1).join('/');
+
+    if (provider === 'ollama') {
+      if (!await checkOllama()) return null;
+      const resp = await fetch('http://localhost:11434/api/embed', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({model: model, input: [text]}),
+      });
+      const data = await resp.json();
+      return data.embeddings?.[0] || null;
+    } else if (provider === 'openai') {
+      if (!apiKey) return null;
+      const resp = await fetch('https://api.openai.com/v1/embeddings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + apiKey,
+        },
+        body: JSON.stringify({model: model, input: [text]}),
+      });
+      const data = await resp.json();
+      return data.data?.[0]?.embedding || null;
+    }
+    return null;
+  }
+
+  // RAG search: try vector search, fall back to keyword search
+  async function ragSearch(query, apiKey) {
+    const emb = await loadEmbeddings();
+    const chunks = emb?.chunks || [];
+    if (!chunks.length) return [];
+
+    // Try vector search first (if embeddings have vectors and API is reachable)
+    if (chunks[0]?.embedding) {
+      try {
+        const queryVec = await embedQuery(query, apiKey);
+        if (queryVec) {
+          const scored = chunks.map(c => ({
+            score: cosineSim(queryVec, c.embedding),
+            text: c.text, source: c.source, type: c.type,
+          }));
+          scored.sort((a, b) => b.score - a.score);
+          return scored.slice(0, TOP_K);
+        }
+      } catch (e) {
+        console.warn('[CacaoDocs] Vector search failed, using keyword search:', e);
+      }
+    }
+
+    // Fallback: keyword search (always works)
+    return keywordSearch(query, chunks, TOP_K);
+  }
+
+  // Determine API endpoint and headers for a model
+  function getProviderConfig(modelStr, apiKey) {
+    const parts = modelStr.split('/');
+    const provider = parts[0];
+    const model = parts.slice(1).join('/');
+
+    if (provider === 'ollama') {
+      return {
+        url: 'http://localhost:11434/api/chat',
+        headers: {'Content-Type': 'application/json'},
+        body: (msgs) => JSON.stringify({model: model, messages: msgs, stream: true}),
+        parseStream: 'ollama',
+      };
+    } else if (provider === 'openai') {
+      return {
+        url: 'https://api.openai.com/v1/chat/completions',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + (apiKey || ''),
+        },
+        body: (msgs) => JSON.stringify({model: model, messages: msgs, stream: true}),
+        parseStream: 'openai',
+      };
+    } else if (provider === 'claude') {
+      return {
+        url: 'https://api.anthropic.com/v1/messages',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey || '',
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true',
+        },
+        body: (msgs) => {
+          const sysMsg = msgs.find(m => m.role === 'system');
+          const chatMsgs = msgs.filter(m => m.role !== 'system');
+          const payload = {model: model, messages: chatMsgs, max_tokens: 4096, stream: true};
+          if (sysMsg) payload.system = sysMsg.content;
+          return JSON.stringify(payload);
+        },
+        parseStream: 'claude',
+      };
+    } else if (provider === 'groq') {
+      return {
+        url: 'https://api.groq.com/openai/v1/chat/completions',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + (apiKey || ''),
+        },
+        body: (msgs) => JSON.stringify({model: model, messages: msgs, stream: true}),
+        parseStream: 'openai',
+      };
+    }
+    // Fallback: assume OpenAI-compatible
+    return {
+      url: 'https://api.openai.com/v1/chat/completions',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + (apiKey || ''),
+      },
+      body: (msgs) => JSON.stringify({model: model, messages: msgs, stream: true}),
+      parseStream: 'openai',
+    };
+  }
+
+  // Stream LLM response
+  async function streamChat(messages, modelStr, apiKey, signalName) {
+    const ws = window.Cacao?.ws;
+    const config = getProviderConfig(modelStr, apiKey);
+
+    const resp = await fetch(config.url, {
+      method: 'POST',
+      headers: config.headers,
+      body: config.body(messages),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(err || resp.statusText);
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let fullText = '';
+    let buffer = '';
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, {stream: true});
+      const lines = buffer.split('\\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed === 'data: [DONE]') continue;
+
+        let delta = '';
+        if (config.parseStream === 'ollama') {
+          try {
+            const obj = JSON.parse(trimmed);
+            delta = obj.message?.content || '';
+          } catch {}
+        } else if (config.parseStream === 'openai') {
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const obj = JSON.parse(trimmed.slice(6));
+              delta = obj.choices?.[0]?.delta?.content || '';
+            } catch {}
+          }
+        } else if (config.parseStream === 'claude') {
+          if (trimmed.startsWith('data: ')) {
+            try {
+              const obj = JSON.parse(trimmed.slice(6));
+              if (obj.type === 'content_block_delta') {
+                delta = obj.delta?.text || '';
+              }
+            } catch {}
+          }
+        }
+
+        if (delta) {
+          fullText += delta;
+          if (ws) ws.dispatchChat({type: 'chat_delta', signal: signalName, delta: delta});
+        }
+      }
+    }
+
+    if (ws) ws.dispatchChat({type: 'chat_done', signal: signalName});
+    return fullText;
+  }
+
+  // Expose for handlers
+  window.__cacaoDocs = {
+    ragSearch,
+    streamChat,
+    loadEmbeddings,
+    checkOllama,
+    SYSTEM_PROMPT,
+  };
+})();
+'''
+
+        _chat_send_handler = '''async function(signals, event) {
+    const text = (event.text || '').trim();
+    if (!text) return;
+
+    const signalName = 'chat_messages';
+    const msgs = signals.get(signalName) || [];
+    signals.set(signalName, [...msgs, {role: 'user', content: text}]);
+
+    const apiKey = signals.get('chat_api_key') || '';
+    const model = signals.get('chat_model') || 'openai/gpt-4o-mini';
+    const systemPrompt = signals.get('chat_system_prompt') || window.__cacaoDocs.SYSTEM_PROMPT;
+
+    // Check if LLM is reachable
+    const isOllamaModel = model.startsWith('ollama/');
+    if (isOllamaModel) {
+      const ollamaOk = await window.__cacaoDocs.checkOllama();
+      if (!ollamaOk) {
+        const updated = signals.get(signalName) || [];
+        signals.set(signalName, [...updated, {role: 'error', content:
+          'Ollama is not running locally. To use local AI:\\n\\n' +
+          '1. Install Ollama: https://ollama.com/download\\n' +
+          '2. Run: ollama pull ' + model.split('/')[1] + '\\n' +
+          '3. Start Ollama and refresh this page\\n\\n' +
+          'Or enter an API key and switch to a cloud model (OpenAI, Claude, Groq).'}]);
+        return;
+      }
+    } else if (!apiKey) {
+      const updated = signals.get(signalName) || [];
+      signals.set(signalName, [...updated, {role: 'error', content:
+        'Please enter an API key in Settings for ' + model + '.'}]);
+      return;
+    }
+
+    try {
+      // RAG: find relevant documentation
+      let contextStr = '';
+      try {
+        const results = await window.__cacaoDocs.ragSearch(text, apiKey);
+        if (results.length > 0) {
+          contextStr = '\\n\\nRelevant documentation:\\n' +
+            results.map(r => '[' + r.type + '] ' + r.source + ':\\n' + r.text).join('\\n---\\n');
+        }
+      } catch (e) {
+        console.warn('[CacaoDocs] RAG search failed, continuing without context:', e);
+      }
+
+      // Build messages for LLM
+      const llmMessages = [
+        {role: 'system', content: systemPrompt + contextStr},
+      ];
+      // Add recent chat history (last 10 messages)
+      const recent = (signals.get(signalName) || []).slice(-10);
+      for (const m of recent) {
+        if (m.role === 'user' || m.role === 'assistant') {
+          llmMessages.push({role: m.role, content: m.content});
+        }
+      }
+
+      const fullResponse = await window.__cacaoDocs.streamChat(
+        llmMessages, model, apiKey, signalName
+      );
+
+      const updated = signals.get(signalName) || [];
+      signals.set(signalName, [...updated, {role: 'assistant', content: fullResponse}]);
+
+    } catch (e) {
+      const updated = signals.get(signalName) || [];
+      signals.set(signalName, [...updated, {role: 'error', content: String(e)}]);
+      if (window.Cacao?.ws) {
+        window.Cacao.ws.dispatchChat({type: 'chat_done', signal: signalName});
+      }
+    }
+  }'''
+
+        _chat_clear_handler = '''function(signals, event) {
+    signals.set('chat_messages', []);
+    try { localStorage.removeItem('cacao-chat-chat_messages'); } catch {}
+  }'''
+
+        # Register static handlers and scripts in app code
+        _chat_static_registration = f'''
+# --- Static Chat Handlers (for GitHub Pages / static export) ---
+c.static_script({_chat_static_script!r})
+c.static_handler("chat_send", {_chat_send_handler!r})
+c.static_handler("chat_clear", {_chat_clear_handler!r})'''
+    else:
+        _chat_state_block = ""
+        _chat_nav_item = ""
+        _chat_panel_block = ""
+        _chat_static_registration = ""
 
     code = f'''"""Auto-generated documentation app powered by CacaoDocs + Cacao."""
 import json
@@ -282,6 +901,83 @@ c.config(
     title={title!r},
     theme={theme!r},
 )
+
+{_chat_state_block}
+
+{_chat_static_registration}
+
+# --- Sub-navigation Styles ---
+c.raw_html(\'\'\'<style>
+.cacaodocs-subnav {{
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: sticky;
+    top: 0;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    padding-right: 8px;
+}}
+.cacaodocs-subnav-group {{
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--c-text-muted, #888);
+    padding: 12px 10px 4px;
+}}
+.cacaodocs-subnav-item {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    text-decoration: none;
+    color: var(--c-text, inherit);
+    font-size: 13px;
+    transition: background 0.15s;
+    cursor: pointer;
+}}
+.cacaodocs-subnav-item:hover {{
+    background: var(--c-bg-hover, rgba(128,128,128,0.1));
+}}
+.cacaodocs-subnav-name {{
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}}
+.cacaodocs-subnav-path {{
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--c-font-mono, monospace);
+    font-size: 12px;
+}}
+.cacaodocs-subnav-badge {{
+    font-size: 11px;
+    color: var(--c-text-muted, #888);
+    min-width: 18px;
+    text-align: center;
+}}
+.cacaodocs-method-badge {{
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 3px;
+    min-width: 40px;
+    text-align: center;
+    flex-shrink: 0;
+}}
+.cacaodocs-method-get {{ background: rgba(34,197,94,0.15); color: #22c55e; }}
+.cacaodocs-method-post {{ background: rgba(59,130,246,0.15); color: #3b82f6; }}
+.cacaodocs-method-put {{ background: rgba(234,179,8,0.15); color: #eab308; }}
+.cacaodocs-method-patch {{ background: rgba(234,179,8,0.15); color: #eab308; }}
+.cacaodocs-method-delete {{ background: rgba(239,68,68,0.15); color: #ef4444; }}
+.cacaodocs-method-options {{ background: rgba(128,128,128,0.15); color: #888; }}
+.cacaodocs-method-head {{ background: rgba(128,128,128,0.15); color: #888; }}
+</style>\'\'\')
 
 # --- Helpers ---
 
@@ -580,20 +1276,13 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
                     c.nav_item(label, key=f"mod_{{mod['full_path']}}", icon="file", badge=badge_count)
 
         if _CLASSES:
-            with c.nav_group("Classes", icon="box"):
-                for cls in _CLASSES:
-                    method_count = str(len(cls.get("methods", [])))
-                    c.nav_item(cls["name"], key=f"cls_{{cls['full_path']}}", icon="box", badge=method_count)
+            c.nav_item("Types", key="types_ref", icon="box",
+                        badge=str(len(_CLASSES)))
 
         # API Endpoints section
         if _API_ENDPOINTS:
-            with c.nav_group("API", icon="code"):
-                for ep in _API_ENDPOINTS:
-                    ds = ep.get("docstring", {{}})
-                    method = ds.get("http_method", "")
-                    path = ds.get("path", "")
-                    label = f"{{method}} {{path}}" if method and path else ep["name"]
-                    c.nav_item(label, key=f"api_{{ep['full_path']}}", icon="code")
+            c.nav_item("API Reference", key="api_ref", icon="code",
+                        badge=str(len(_API_ENDPOINTS)))
 
         c.nav_item("Call Map", key="callmap", icon="code")
 
@@ -601,6 +1290,8 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
             with c.nav_group("Pages", icon="book"):
                 for page in _PAGES:
                     c.nav_item(page["title"], key=f"page_{{page['slug']}}", icon="book")
+
+{_chat_nav_item}
 
     with c.shell_content():
 
@@ -689,40 +1380,118 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
                     for func in mod["functions"]:
                         _render_function_block(func)
 
-        # --- Class Panels ---
-        for cls in _CLASSES:
-            with c.nav_panel(f"cls_{{cls['full_path']}}"):
-                c.title(cls["name"], level=2)
-                if cls.get("module"):
-                    c.text(cls["module"], size="sm", color="muted")
-                c.spacer(3)
-                _render_class_detail(cls)
+        # --- Types Reference Panel ---
+        if _CLASSES:
+            with c.nav_panel("types_ref"):
+                with c.layout("sidebar", sidebar_width="260px") as _tl:
+                    with _tl.side():
+                        c.title("Types", level=3)
+                        c.spacer(2)
+                        # Group classes by module
+                        _cls_by_mod = {{}}
+                        for cls in _CLASSES:
+                            mod = cls.get("module", "")
+                            _cls_by_mod.setdefault(mod, []).append(cls)
 
-        # --- API Endpoint Panels ---
-        for ep in _API_ENDPOINTS:
-            with c.nav_panel(f"api_{{ep['full_path']}}"):
-                ds = ep.get("docstring", {{}})
-                method = ds.get("http_method", "")
-                path = ds.get("path", "")
+                        _cls_nav_html = '<div class="cacaodocs-subnav">'
+                        for mod, classes in _cls_by_mod.items():
+                            if mod:
+                                _cls_nav_html += f'<div class="cacaodocs-subnav-group">{{mod}}</div>'
+                            for cls in classes:
+                                method_count = len(cls.get("methods", []))
+                                _cls_nav_html += (
+                                    f'<a class="cacaodocs-subnav-item" href="#type_{{cls["full_path"]}}">'
+                                    f'<span class="cacaodocs-subnav-name">{{cls["name"]}}</span>'
+                                    f'<span class="cacaodocs-subnav-badge">{{method_count}}</span>'
+                                    f'</a>'
+                                )
+                        _cls_nav_html += '</div>'
+                        c.raw_html(_cls_nav_html)
 
-                # Header with method badge + path
-                with c.row(gap=3, wrap=True):
-                    if method:
-                        c.badge(method, color=_METHOD_COLORS.get(method, "default"))
-                    c.title(path or ep["name"], level=2)
+                    with _tl.main():
+                        c.title("Types Reference", level=2)
+                        c.text(f"{{len(_CLASSES)}} classes across the codebase.", color="muted")
+                        c.spacer(4)
 
-                if ep.get("module"):
-                    c.text(f'{{ep["module"]}}.{{ep["name"]}}', size="sm", color="muted")
+                        for cls in _CLASSES:
+                            c.raw_html(f'<div id="type_{{cls["full_path"]}}"></div>')
+                            with c.card():
+                                _render_class_detail(cls)
+                            c.spacer(3)
 
-                c.spacer(3)
-                _render_docstring(ds)
+        # --- API Reference Panel ---
+        if _API_ENDPOINTS:
+            with c.nav_panel("api_ref"):
+                with c.layout("sidebar", sidebar_width="260px") as _al:
+                    with _al.side():
+                        c.title("Endpoints", level=3)
+                        c.spacer(2)
+                        # Group by path prefix (first path segment)
+                        _ep_groups = {{}}
+                        for ep in _API_ENDPOINTS:
+                            ds = ep.get("docstring", {{}})
+                            path = ds.get("path", "")
+                            prefix = "/" + path.strip("/").split("/")[0] if path.strip("/") else "/"
+                            _ep_groups.setdefault(prefix, []).append(ep)
 
-                # Source
-                if ep.get("source"):
-                    c.spacer(3)
-                    with c.tabs():
-                        with c.tab("src_" + ep["name"], "Source Code"):
-                            c.code(ep["source"], language="python")
+                        _api_nav_html = '<div class="cacaodocs-subnav">'
+                        for prefix, eps in _ep_groups.items():
+                            _api_nav_html += f'<div class="cacaodocs-subnav-group">{{prefix}}</div>'
+                            for ep in eps:
+                                ds = ep.get("docstring", {{}})
+                                method = ds.get("http_method", "GET")
+                                path = ds.get("path", ep["name"])
+                                method_cls = method.lower()
+                                _api_nav_html += (
+                                    f'<a class="cacaodocs-subnav-item" href="#ep_{{ep["full_path"]}}">'
+                                    f'<span class="cacaodocs-method-badge cacaodocs-method-{{method_cls}}">{{method}}</span>'
+                                    f'<span class="cacaodocs-subnav-path">{{path}}</span>'
+                                    f'</a>'
+                                )
+                        _api_nav_html += '</div>'
+                        c.raw_html(_api_nav_html)
+
+                    with _al.main():
+                        c.title("API Reference", level=2)
+                        c.text(f"{{len(_API_ENDPOINTS)}} endpoints.", color="muted")
+                        c.spacer(3)
+
+                        # Summary table
+                        _method_counts = {{}}
+                        for ep in _API_ENDPOINTS:
+                            m = ep.get("docstring", {{}}).get("http_method", "GET")
+                            _method_counts[m] = _method_counts.get(m, 0) + 1
+                        with c.row(gap=3, wrap=True):
+                            for m, count in sorted(_method_counts.items()):
+                                c.metric(m, count)
+                        c.spacer(4)
+
+                        for ep in _API_ENDPOINTS:
+                            ds = ep.get("docstring", {{}})
+                            method = ds.get("http_method", "")
+                            path = ds.get("path", "")
+
+                            c.raw_html(f'<div id="ep_{{ep["full_path"]}}"></div>')
+                            with c.card():
+                                # Header with method badge + path
+                                with c.row(gap=3, wrap=True):
+                                    if method:
+                                        c.badge(method, color=_METHOD_COLORS.get(method, "default"))
+                                    c.title(path or ep["name"], level=3)
+
+                                if ep.get("module"):
+                                    c.text(f'{{ep["module"]}}.{{ep["name"]}}', size="sm", color="muted")
+
+                                c.spacer(2)
+                                _render_docstring(ds)
+
+                                # Source
+                                if ep.get("source"):
+                                    c.spacer(3)
+                                    with c.tabs():
+                                        with c.tab("src_" + ep["name"], "Source Code"):
+                                            c.code(ep["source"], language="python")
+                            c.spacer(3)
 
         # --- Call Map Panel ---
         with c.nav_panel("callmap"):
@@ -809,6 +1578,8 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
                 c.title(page["title"], level=2)
                 c.spacer(2)
                 c.html(page.get("content", ""))
+
+{_chat_panel_block}
 '''
 
     return code
@@ -849,6 +1620,36 @@ def build_docs(
 
     output_dir = Path(output)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Embedding step (if chat is enabled)
+    chat_enabled = config.get("chat", False)
+    if chat_enabled:
+        chat_config = config.get("chat_config", {})
+        embedding_model = chat_config.get("embedding_model", "openai/text-embedding-3-small")
+
+        chunks = _chunk_documentation(json_data)
+        if chunks:
+            import logging
+            logger = logging.getLogger("cacaodocs")
+            logger.info("Embedding %d documentation chunks with %s...", len(chunks), embedding_model)
+
+            embeddings = _embed_chunks(chunks, embedding_model)
+            if embeddings:
+                emb_path = output_dir / "embeddings.json"
+                with open(emb_path, "w", encoding="utf-8") as f:
+                    json.dump(embeddings, f, ensure_ascii=False)
+                json_data["_embedding_stats"] = {
+                    "chunks": len(chunks),
+                    "model": embedding_model,
+                    "dimensions": embeddings.get("dimensions", 0),
+                }
+            else:
+                logger.warning(
+                    "Embedding failed. Chat will work without RAG context. "
+                    "Ensure %s is available (e.g. `ollama pull %s`).",
+                    embedding_model,
+                    embedding_model.split("/", 1)[-1] if "/" in embedding_model else embedding_model,
+                )
 
     app_code = _generate_app_code(json_data)
     app_path = output_dir / "app.py"

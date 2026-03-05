@@ -57,6 +57,16 @@ def build(source: str, output: str, config: str | None, verbose: bool):
         if num_api:
             click.echo(f"  API Endpoints: {num_api}")
         click.echo(f"  Pages:         {num_pages}")
+
+        # Embedding stats
+        emb_stats = json_data.get("_embedding_stats")
+        if emb_stats:
+            click.echo()
+            click.echo(click.style("  AI/RAG:", fg="cyan"))
+            click.echo(f"    Chunks:     {emb_stats['chunks']}")
+            click.echo(f"    Model:      {emb_stats['model']}")
+            click.echo(f"    Dimensions: {emb_stats['dimensions']}")
+
         click.echo()
         click.echo(f"  Output: {output_path / 'app.py'}")
         click.echo()
@@ -152,9 +162,18 @@ def export(directory: str, output: str, base_path: str):
 
     try:
         subprocess.run(cmd, check=True)
+
+        # Copy embeddings.json if it exists (for RAG chat)
+        embeddings_src = directory / "embeddings.json"
+        if embeddings_src.exists():
+            import shutil
+            shutil.copy2(embeddings_src, output_path / "embeddings.json")
+
         click.echo()
         click.echo(click.style("Static site exported!", fg="green", bold=True))
         click.echo(f"  Output: {output_path}")
+        if embeddings_src.exists():
+            click.echo(click.style("  AI chat with RAG enabled", fg="cyan"))
         click.echo()
         click.echo("You can serve it with any static file server, e.g.:")
         click.echo(f"  python -m http.server -d {output_path}")

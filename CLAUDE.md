@@ -4,9 +4,52 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CacaoDocs is a documentation generator that scans Python files, parses docstrings, and generates interactive documentation apps powered by [Cacao](https://github.com/cacao-research/Cacao).
+CacaoDocs is a **Cacao plugin** that generates interactive documentation from Python docstrings. It is not a standalone tool — it depends on and extends the [Cacao](https://github.com/cacao-research/Cacao) web framework.
 
 Instead of generating static HTML, CacaoDocs generates a Cacao app (`app.py`) that serves documentation with WebSocket-driven reactivity.
+
+## Plugin Architecture
+
+CacaoDocs is a plugin of Cacao. This means:
+
+1. **Cacao owns `cacao.yaml`** — The config file is a Cacao framework feature. Cacao reads its own keys (`title`, `theme`, `port`, `debug`, `branding`) and CacaoDocs reads its plugin-specific keys (`description`, `version`, `github_url`, `doc_types`, `exclude_patterns`, etc.) from the same file.
+
+2. **No duplicate YAML parsing** — CacaoDocs does NOT import PyYAML directly. It delegates all YAML loading to Cacao's config system:
+   ```python
+   import cacao as c
+   raw = c.get_yaml_config()        # Full parsed cacao.yaml dict
+   path = c.get_yaml_config_path()  # Path to the loaded file
+   ```
+
+3. **Cacao provides PyYAML** — Since Cacao >= 2.1.0 includes PyYAML as a required dependency, CacaoDocs does not need to declare it separately.
+
+4. **Shared config, separate concerns** — A single `cacao.yaml` serves both:
+   ```yaml
+   # Cacao framework reads these:
+   title: "My Project"
+   theme: "dark"
+   port: 1502
+
+   # CacaoDocs plugin reads these:
+   description: "API Documentation"
+   version: "1.0.0"
+   github_url: "https://github.com/..."
+   exclude_patterns: [...]
+   doc_types: { ... }
+   ```
+
+### Config Priority
+
+For shared keys like `title` and `theme`:
+- **Cacao framework** applies them at the app level (`c.config()` > `cacao.yaml`)
+- **CacaoDocs** reads them from the raw YAML for its own rendering (e.g. theme color dicts for the docs UI)
+
+### Important Rules
+
+- **Never import `yaml` directly** — Always go through `cacao.config` or `c.get_yaml_config()`
+- **Never duplicate Cacao's config discovery** — Don't search for `cacao.yaml` manually; Cacao handles file discovery
+- **When adding new CacaoDocs config keys**, just add them to `cacao.yaml` — no need to create a separate config file
+- **Minimum Cacao version is 2.1.0** — This is when `cacao.yaml` support and `get_yaml_config()` were added
 
 ## Common Commands
 
@@ -37,11 +80,11 @@ pip install cacaodocs       # Install from PyPI
 ## Architecture
 
 ### Package Structure (`cacaodocs/`)
-- **`cli.py`** - Click CLI with `build`, `serve`, `init` commands
+- **`cli.py`** - Click CLI with `build`, `serve`, `init`, `export` commands
 - **`scanner.py`** - File discovery + AST extraction + API decorator auto-detection
 - **`parser.py`** - Docstring parser with Type: directive and all doc type sections
 - **`builder.py`** - Generates a Cacao app from parsed documentation
-- **`config.py`** - YAML configuration loader with custom doc type parsing
+- **`config.py`** - Config loader that delegates to Cacao's YAML system, then extracts CacaoDocs-specific keys
 - **`types.py`** - Dataclasses and DocType enum for parsed documentation
 
 ### Data Flow
@@ -79,10 +122,13 @@ Auto-detection: Scanner checks decorators for `@app.get`, `@router.post`, `@app.
 
 ### Configuration (`cacao.yaml`)
 ```yaml
+# Cacao framework keys
 title: "My Project"
+theme: "dark"
+
+# CacaoDocs plugin keys
 description: "API Documentation"
 version: "1.0.0"
-theme: "dark"
 github_url: "https://github.com/..."
 
 exclude_patterns:
@@ -102,7 +148,6 @@ doc_types:
 ```
 
 ### Dependencies
-- **cacao** (>=2.0.8) - Reactive web framework for rendering docs
+- **cacao** (>=2.1.0) - Reactive web framework (provides PyYAML, config system, rendering)
 - **click** - CLI framework
-- **PyYAML** - Configuration loading
 - **Markdown** - Markdown to HTML conversion

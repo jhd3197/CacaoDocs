@@ -32,9 +32,8 @@ setup(
     python_requires='>=3.10',
     install_requires=[
         "click>=8.0.0",
-        "PyYAML>=6.0",
         "Markdown>=3.4",
-        "cacao>=2.0.8",
+        "cacao>=2.1.0",  # 2.1.0+ includes PyYAML and cacao.yaml config system
     ],
     entry_points={
         'console_scripts': [
