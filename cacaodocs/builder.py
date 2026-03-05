@@ -197,12 +197,32 @@ def build_json(
     }
 
 
+def _is_light_color(hex_color: str) -> bool:
+    """Check if a hex color is light based on luminance."""
+    hex_color = hex_color.lstrip("#")
+    if len(hex_color) == 3:
+        hex_color = "".join(c * 2 for c in hex_color)
+    try:
+        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+        luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+        return luminance > 0.5
+    except (ValueError, IndexError):
+        return False
+
+
 def _generate_app_code(json_data: dict[str, Any]) -> str:
     """Generate the Cacao app Python code for the documentation."""
     config = json_data.get("config", {})
     title = config.get("title", "Documentation")
     description = config.get("description", "")
-    theme = config.get("theme", "dark")
+    raw_theme = config.get("theme", "dark")
+    # Theme can be a dict of colors (from cacao.yaml) — normalize to "dark"/"light"
+    if isinstance(raw_theme, dict):
+        # Guess from bg_color: light backgrounds → "light", else "dark"
+        bg = raw_theme.get("bg_color", "#000")
+        theme = "light" if _is_light_color(bg) else "dark"
+    else:
+        theme = raw_theme
     version = config.get("version", "")
 
     # Remove non-serializable items from config before embedding
