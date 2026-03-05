@@ -9,14 +9,14 @@ long_description = (HERE / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="cacaodocs",
-    version='0.3.0',
+    version='0.4.0',
     author="Juan Denis",
     author_email="juan@vene.co",
     description="Generate documentation from Python docstrings, powered by Cacao.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jhd3197/CacaoDocs",
-    packages=find_packages(exclude=["old", "old.*"]),
+    packages=find_packages(exclude=["old", "old.*", "test-src", "test-docs"]),
     include_package_data=True,
     classifiers=[
         "Programming Language :: Python :: 3",

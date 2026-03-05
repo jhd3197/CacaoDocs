@@ -115,6 +115,64 @@ def serve(directory: str, port: int, host: str):
 
 
 @cli.command()
+@click.argument("directory", type=click.Path(exists=True), default="./docs")
+@click.option("-o", "--output", type=click.Path(), default="./dist", help="Output directory for static site.")
+@click.option("--base-path", type=str, default="", help="Base path for deployment (e.g., /my-repo for GitHub Pages).")
+def export(directory: str, output: str, base_path: str):
+    """Export documentation as a static HTML site.
+
+    DIRECTORY is the path to the generated docs (default: ./docs).
+
+    The output can be hosted on GitHub Pages, Netlify, etc.
+
+    Examples:
+        cacaodocs export
+        cacaodocs export ./docs -o ./dist
+        cacaodocs export ./docs --base-path /my-repo
+    """
+    directory = Path(directory).resolve()
+    app_file = directory / "app.py"
+
+    if not app_file.exists():
+        click.echo(
+            click.style(
+                f"Error: No app.py found in {directory}. Run 'cacaodocs build' first.",
+                fg="red",
+            ),
+            err=True,
+        )
+        sys.exit(1)
+
+    output_path = Path(output).resolve()
+    click.echo(f"Exporting static site to {output_path}")
+
+    cmd = ["cacao", "build", str(app_file), "-o", str(output_path)]
+    if base_path:
+        cmd.extend(["--base-path", base_path])
+
+    try:
+        subprocess.run(cmd, check=True)
+        click.echo()
+        click.echo(click.style("Static site exported!", fg="green", bold=True))
+        click.echo(f"  Output: {output_path}")
+        click.echo()
+        click.echo("You can serve it with any static file server, e.g.:")
+        click.echo(f"  python -m http.server -d {output_path}")
+    except FileNotFoundError:
+        click.echo(
+            click.style("Error: Cacao not found. Install it: pip install cacao", fg="red"),
+            err=True,
+        )
+        sys.exit(1)
+    except subprocess.CalledProcessError:
+        click.echo(
+            click.style("Error: Static build failed.", fg="red"),
+            err=True,
+        )
+        sys.exit(1)
+
+
+@cli.command()
 @click.option("-o", "--output", type=click.Path(), default="cacao.yaml", help="Output path.")
 @click.option("-f", "--force", is_flag=True, help="Overwrite existing file.")
 def init(output: str, force: bool):

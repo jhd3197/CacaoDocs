@@ -172,3 +172,6 @@ cython_debug/
 node_modules/
 /.vscode
 /.old
+/_build/
+/dist/
+*.zip

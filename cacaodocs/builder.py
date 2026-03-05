@@ -788,7 +788,7 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
             with c.nav_panel(f"page_{{page['slug']}}"):
                 c.title(page["title"], level=2)
                 c.spacer(2)
-                c.text(page.get("content", ""))
+                c.html(page.get("content", ""))
 '''
 
     return code
