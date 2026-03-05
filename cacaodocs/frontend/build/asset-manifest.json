@@ -1,15 +1,15 @@
 {
   "files": {
     "main.js": "./bundle.js",
-    "styles.css": "./static/css/styles.db95c65d.css",
+    "styles.css": "./static/css/styles.10722aa0.css",
     "bundle.js.map": "./bundle.js.map",
     "index.html": "./index.html",
     "bundle.js.LICENSE.txt": "./bundle.js.LICENSE.txt",
     "images/data.js": "./images/247245c2e4427002df30.js",
-    "styles.db95c65d.css.map": "./static/css/styles.db95c65d.css.map"
+    "styles.10722aa0.css.map": "./static/css/styles.10722aa0.css.map"
   },
   "entrypoints": [
-    "static/css/styles.db95c65d.css",
+    "static/css/styles.10722aa0.css",
     "bundle.js"
   ]
 }

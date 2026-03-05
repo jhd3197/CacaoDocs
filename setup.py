@@ -9,10 +9,10 @@ long_description = (HERE / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="cacaodocs",
-    version='0.1.14',
+    version='0.2.0',
     author="Juan Denis",
     author_email="juan@vene.co",
-    description="A lightweight Python package to extract API documentation from docstrings.",
+    description="Generate beautiful documentation from Python docstrings.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jhd3197/CacaoDocs",
@@ -23,17 +23,24 @@ setup(
     include_package_data=True,
     classifiers=[
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
+        "Programming Language :: Python :: 3.11",
+        "Programming Language :: Python :: 3.12",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
+        "Environment :: Console",
+        "Topic :: Documentation",
+        "Topic :: Software Development :: Documentation",
     ],
-    python_requires='>=3.6',
+    python_requires='>=3.10',
     install_requires=[
-        "Jinja2==3.0.0",
-        "Markdown==3.7",
-        "beautifulsoup4==4.12.3",
-        "Flask==2.0.0",
-        "PyYAML==6.0.2",
-        "Werkzeug==2.0.0",
-        "Flask-Cors==5.0.0",
+        "click>=8.0.0",
+        "PyYAML>=6.0",
+        "Markdown>=3.4",
     ],
+    entry_points={
+        'console_scripts': [
+            'cacaodocs=cacaodocs.cli:main',
+        ],
+    },
 )

@@ -1,84 +1,20 @@
 import React, { ReactNode, useState, useMemo, CSSProperties } from 'react';
-import { Menu, Tag, Typography, Input, ConfigProvider } from 'antd';
-import { useLocation } from 'react-router-dom';
-import { ApiOutlined, SearchOutlined, CodeOutlined, BookOutlined } from '@ant-design/icons';
+import { Menu, Input, ConfigProvider } from 'antd';
+import { useLocation, Link } from 'react-router-dom';
+import {
+    SearchOutlined,
+    AppstoreOutlined,
+    BlockOutlined,
+    FunctionOutlined,
+    FileTextOutlined
+} from '@ant-design/icons';
 import './SecondarySidebar.css';
-import { Background } from 'reactflow';
-import type { AppData, DocItem, ApiEndpoint, TypeItem  } from '../../global';
-
-const { Text } = Typography;
+import type { AppData, ModuleDoc, ClassDoc, FunctionDoc } from '../../global';
 const { SubMenu } = Menu;
 
-
 interface SecondarySidebarProps {
-    onEndpointSelect?: (endpoint: string) => void;
     data: AppData;
 }
-
-const methodColors: Record<string, string> = {
-    GET: '#10B981',
-    POST: '#331201',
-    PUT: '#331201',
-    DELETE: '#EF4444',
-    PATCH: '#8B5CF6'
-};
-
-const EndpointItem: React.FC<{
-    endpoint: ApiEndpoint;
-    onClick: () => void;
-}> = ({ endpoint, onClick }) => (
-    <div
-        onClick={() => {
-            onClick();
-            // Include method in the hash
-            const hash = `/api#${endpoint.endpoint}-${endpoint.method}`;
-            window.location.hash = hash;
-        }}
-        style={{
-            borderRadius: '8px',
-            padding: '8px 12px',
-            margin: '8px 0',
-            cursor: 'pointer',
-            border: '1px solid #E2E8F0',
-            transition: 'all 0.2s ease',
-            boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
-            background: '#FFFFFF',
-        }}
-        onMouseEnter={e => {
-            e.currentTarget.style.background = '#F8FAFC';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-            e.currentTarget.style.boxShadow = '0 4px 6px rgba(0, 0, 0, 0.05)';
-        }}
-        onMouseLeave={e => {
-            e.currentTarget.style.background = '#FFFFFF';
-            e.currentTarget.style.transform = 'translateY(0)';
-            e.currentTarget.style.boxShadow = '0 1px 2px rgba(0, 0, 0, 0.05)';
-        }}
-    >
-        <Text style={{ 
-            display: 'block',
-            fontSize: '13px',
-            color: '#475569',
-            marginBottom: '4px',
-            fontWeight: 500
-        }}>
-            {endpoint.endpoint}
-        </Text>
-        <Tag
-            color={methodColors[endpoint.method]}
-            style={{
-                margin: 0,
-                padding: '0px 4px',
-                borderRadius: '4px',
-                fontSize: '11px',
-                lineHeight: '18px',
-                fontWeight: 600
-            }}
-        >
-            {endpoint.method}
-        </Tag>
-    </div>
-);
 
 const SearchInput: React.FC<{
     value: string;
@@ -100,9 +36,9 @@ const SearchInput: React.FC<{
     />
 ));
 
-const MenuContainer: React.FC<{ 
-    children: ReactNode; 
-    searchText: string; 
+const MenuContainer: React.FC<{
+    children: ReactNode;
+    searchText: string;
     onSearchChange: (value: string) => void;
     openKeys: string[];
     styles: {
@@ -139,9 +75,9 @@ const MenuContainer: React.FC<{
                 },
             }}
         >
-            <Menu 
-                mode="inline" 
-                openKeys={openKeys}
+            <Menu
+                mode="inline"
+                defaultOpenKeys={openKeys}
                 style={{
                     backgroundColor: 'transparent',
                     color: themeVars?.secondary_sidebar_text_color || '#fff'
@@ -153,25 +89,15 @@ const MenuContainer: React.FC<{
     </div>
 );
 
-const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, data }) => {
+const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ data }) => {
     const themeVars = data?.config?.theme || {
         secondary_sidebar_bg_color: 'rgb(42 36 32 / 30%)',
         secondary_sidebar_text_color: '#fff'
-    };
-    
-    console.log('SecondarySidebar received data:', data); // Debug log
-    
-    // Add null checks and default arrays
-    const safeData = {
-        api: Array.isArray(data?.api) ? data.api : [],
-        docs: Array.isArray(data?.docs) ? data.docs : [],
-        types: Array.isArray(data?.types) ? data.types : []
     };
 
     const location = useLocation();
     const [searchText, setSearchText] = useState('');
 
-    // Move MENU_STYLES inside the component
     const menuStyles = {
         base: {
             borderRight: 0,
@@ -182,7 +108,7 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, d
             height: '100vh',
             overflowY: 'auto' as const,
             borderRight: `1px solid ${themeVars.secondary_sidebar_bg_color}`,
-            maxHeight: '100%', // Ensure it doesn't overflow on mobile
+            maxHeight: '100%',
             backgroundColor: themeVars.secondary_sidebar_bg_color
         },
         search: {
@@ -204,75 +130,99 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, d
         } as CSSProperties
     };
 
-    const filterItems = <T extends { function_name?: string; endpoint?: string }>(items: T[]) => {
-        return items.filter(item => 
-            (item.function_name?.toLowerCase().includes(searchText.toLowerCase()) ||
-            item.endpoint?.toLowerCase().includes(searchText.toLowerCase()))
-        );
-    };
-
-    const isApiPage = location.pathname === '/api';
-    const isTypesPage = location.pathname.includes('/types');
-    const isDocsPage = location.pathname.includes('/docs');
-
-    // Memoize tags to prevent infinite re-renders
-    const allTags = useMemo(() => {
-        const apiTags = Array.from(new Set(safeData.api.map(item => item.tag)));
-        const docsTags = Array.from(new Set(safeData.docs.map(item => item.tag)));
-        const typesTags = Array.from(new Set(safeData.types.map(item => item.tag)));
-        return [...apiTags, ...docsTags, ...typesTags] as string[];
-    }, [safeData]);
-
-    const [openKeys, setOpenKeys] = useState<string[]>(allTags);
+    const isModulesPage = location.pathname.startsWith('/modules');
+    const isClassesPage = location.pathname.startsWith('/classes');
+    const isFunctionsPage = location.pathname.startsWith('/functions');
+    const isPagesPage = location.pathname.startsWith('/pages');
 
     const SECTION_ICONS = {
-        api: <ApiOutlined style={{ color: '#fff' }} />,
-        types: <CodeOutlined style={{ color: '#fff' }} />,
-        docs: <BookOutlined style={{ color: '#fff' }} />
+        modules: <AppstoreOutlined style={{ color: '#fff' }} />,
+        classes: <BlockOutlined style={{ color: '#fff' }} />,
+        functions: <FunctionOutlined style={{ color: '#fff' }} />,
+        pages: <FileTextOutlined style={{ color: '#fff' }} />
     };
 
-    if (isTypesPage) {
-        const typesByTag = Object.entries(
-            filterItems(safeData.types).reduce((acc: Record<string, TypeItem[]>, type) => {
-                if (!acc[type.tag]) {
-                    acc[type.tag] = [];
-                }
-                acc[type.tag].push(type);
-                return acc;
-            }, {})
+    // Group modules by top-level package
+    const groupedModules = useMemo(() => {
+        const filtered = data.modules.filter(m =>
+            m.full_path.toLowerCase().includes(searchText.toLowerCase()) ||
+            m.name.toLowerCase().includes(searchText.toLowerCase())
         );
+        return filtered.reduce((acc, module) => {
+            const parts = module.full_path.split('.');
+            const topLevel = parts[0] || module.name;
+            if (!acc[topLevel]) acc[topLevel] = [];
+            acc[topLevel].push(module);
+            return acc;
+        }, {} as Record<string, ModuleDoc[]>);
+    }, [data.modules, searchText]);
 
-        const scrollToType = (functionName: string) => {
-            const element = document.getElementById(`type-${functionName}`);
-            if (element) {
-                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        };
+    // Group classes by module
+    const groupedClasses = useMemo(() => {
+        const filtered = data.classes.filter(c =>
+            c.name.toLowerCase().includes(searchText.toLowerCase()) ||
+            c.full_path.toLowerCase().includes(searchText.toLowerCase())
+        );
+        return filtered.reduce((acc, cls) => {
+            const module = cls.module || 'Other';
+            if (!acc[module]) acc[module] = [];
+            acc[module].push(cls);
+            return acc;
+        }, {} as Record<string, ClassDoc[]>);
+    }, [data.classes, searchText]);
 
+    // Group functions by module
+    const groupedFunctions = useMemo(() => {
+        const filtered = data.functions.filter(f =>
+            f.name.toLowerCase().includes(searchText.toLowerCase()) ||
+            f.full_path.toLowerCase().includes(searchText.toLowerCase())
+        );
+        return filtered.reduce((acc, func) => {
+            const module = func.module || 'Other';
+            if (!acc[module]) acc[module] = [];
+            acc[module].push(func);
+            return acc;
+        }, {} as Record<string, FunctionDoc[]>);
+    }, [data.functions, searchText]);
+
+    // Filter pages
+    const filteredPages = useMemo(() => {
+        return data.pages.filter(p =>
+            p.title.toLowerCase().includes(searchText.toLowerCase()) ||
+            p.slug.toLowerCase().includes(searchText.toLowerCase())
+        );
+    }, [data.pages, searchText]);
+
+    const allKeys = useMemo(() => [
+        ...Object.keys(groupedModules),
+        ...Object.keys(groupedClasses),
+        ...Object.keys(groupedFunctions),
+    ], [groupedModules, groupedClasses, groupedFunctions]);
+
+    if (isModulesPage) {
         return (
-            <MenuContainer 
-                searchText={searchText} 
+            <MenuContainer
+                searchText={searchText}
                 onSearchChange={setSearchText}
-                openKeys={allTags}
+                openKeys={Object.keys(groupedModules)}
                 styles={menuStyles}
                 themeVars={themeVars}
             >
-                {typesByTag.map(([tag, types]) => (
-                    <SubMenu 
-                        key={tag} 
+                {Object.entries(groupedModules).map(([pkg, modules]) => (
+                    <SubMenu
+                        key={pkg}
                         title={
                             <span style={menuStyles.groupTitle}>
-                                {SECTION_ICONS.types}
-                                {tag.charAt(0).toUpperCase() + tag.slice(1)}
+                                {SECTION_ICONS.modules}
+                                {pkg}
                             </span>
                         }
                     >
-                        {types.map(type => (
-                            <Menu.Item 
-                                key={type.function_name}
-                                onClick={() => scrollToType(type.function_name)}
-                            >
-                                {type.function_name} ( )
+                        {modules.map(module => (
+                            <Menu.Item key={module.full_path}>
+                                <Link to={`/modules/${encodeURIComponent(module.full_path)}`}>
+                                    {module.full_path}
+                                </Link>
                             </Menu.Item>
                         ))}
                     </SubMenu>
@@ -281,48 +231,30 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, d
         );
     }
 
-    if (isDocsPage) {
-        const docsByTag = Object.entries(
-            filterItems(safeData.docs).reduce((acc: Record<string, DocItem[]>, doc) => {
-                if (!acc[doc.tag]) {
-                    acc[doc.tag] = [];
-                }
-                acc[doc.tag].push(doc);
-                return acc;
-            }, {})
-        );
-
-        const scrollToDoc = (functionName: string) => {
-            const element = document.getElementById(`doc-${functionName}`);
-            if (element) {
-                element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        };
-
+    if (isClassesPage) {
         return (
-            <MenuContainer 
-                searchText={searchText} 
+            <MenuContainer
+                searchText={searchText}
                 onSearchChange={setSearchText}
-                openKeys={allTags}
+                openKeys={Object.keys(groupedClasses)}
                 styles={menuStyles}
                 themeVars={themeVars}
             >
-                {docsByTag.map(([tag, docs]) => (
-                    <SubMenu 
-                        key={tag} 
+                {Object.entries(groupedClasses).map(([module, classes]) => (
+                    <SubMenu
+                        key={module}
                         title={
                             <span style={menuStyles.groupTitle}>
-                                {SECTION_ICONS.docs}
-                                {tag.charAt(0).toUpperCase() + tag.slice(1)}
+                                {SECTION_ICONS.classes}
+                                {module}
                             </span>
                         }
                     >
-                        {docs.map(document => (
-                            <Menu.Item 
-                                key={document.function_name}
-                                onClick={() => scrollToDoc(document.function_name)}
-                            >
-                                {document.function_name} ( ) 
+                        {classes.map(cls => (
+                            <Menu.Item key={cls.full_path}>
+                                <Link to={`/classes/${encodeURIComponent(cls.full_path)}`}>
+                                    {cls.name}
+                                </Link>
                             </Menu.Item>
                         ))}
                     </SubMenu>
@@ -331,93 +263,87 @@ const SecondarySidebar: React.FC<SecondarySidebarProps> = ({ onEndpointSelect, d
         );
     }
 
-    if (isApiPage) {
-        const filteredEndpoints = filterItems(safeData.api);
-        
-        const scrollToEndpoint = (endpoint: ApiEndpoint) => {
-            // Create element ID using both endpoint path and method
-            const elementId = `${endpoint.endpoint}-${endpoint.method}`;
-            
-            const retryScroll = async (retries = 5, delay = 100) => {
-                for (let i = 0; i < retries; i++) {
-                    const element = document.getElementById(elementId);
-                    if (element) {
-                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        // Update URL with the combined endpoint and method
-                        window.location.hash = `/api#${elementId}`;
-                        break;
-                    }
-                    await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
-                }
-            };
-
-            retryScroll();
-        };
-
-        const groupedEndpoints = Object.entries(
-            filteredEndpoints.reduce((acc: Record<string, ApiEndpoint[]>, endpoint) => {
-                const tag = endpoint.tag;
-                if (!acc[tag]) acc[tag] = [];
-                acc[tag].push(endpoint);
-                return acc;
-            }, {})
-        ).sort(([a], [b]) => a.localeCompare(b));
-
-        console.log('Grouped API endpoints:', groupedEndpoints); // Debug log
-
+    if (isFunctionsPage) {
         return (
-            <MenuContainer 
-                searchText={searchText} 
+            <MenuContainer
+                searchText={searchText}
                 onSearchChange={setSearchText}
-                openKeys={allTags}
+                openKeys={Object.keys(groupedFunctions)}
                 styles={menuStyles}
                 themeVars={themeVars}
             >
-                {groupedEndpoints.map(([tag, endpoints]) => (
-                    <Menu.SubMenu
-                        key={tag}
-                        style={{ 
-                            background: themeVars.secondary_sidebar_bg_color
-                        }}
+                {Object.entries(groupedFunctions).map(([module, functions]) => (
+                    <SubMenu
+                        key={module}
                         title={
-                            <span style={{ 
-                                ...menuStyles.groupTitle,
-                                color: themeVars.secondary_sidebar_text_color
-                            }}>
-                                {SECTION_ICONS.api}
-                                {tag}
+                            <span style={menuStyles.groupTitle}>
+                                {SECTION_ICONS.functions}
+                                {module}
                             </span>
                         }
                     >
-                        <div style={{ padding: '0 4px' }}>
-                            {filterItems(endpoints).map((endpoint: ApiEndpoint) => (
-                                <EndpointItem
-                                    key={`${endpoint.endpoint}-${endpoint.method}`}
-                                    endpoint={endpoint}
-                                    onClick={() => {
-                                        onEndpointSelect?.(endpoint.endpoint);
-                                        scrollToEndpoint(endpoint);
+                        {functions.map(func => (
+                            <Menu.Item key={func.full_path}>
+                                <a
+                                    href={`#function-${func.name}`}
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        const el = document.getElementById(`function-${func.name}`);
+                                        if (el) el.scrollIntoView({ behavior: 'smooth' });
                                     }}
-                                />
-                            ))}
-                        </div>
-                    </Menu.SubMenu>
+                                >
+                                    {func.name}()
+                                </a>
+                            </Menu.Item>
+                        ))}
+                    </SubMenu>
                 ))}
             </MenuContainer>
         );
     }
 
+    if (isPagesPage) {
+        return (
+            <MenuContainer
+                searchText={searchText}
+                onSearchChange={setSearchText}
+                openKeys={['pages']}
+                styles={menuStyles}
+                themeVars={themeVars}
+            >
+                <SubMenu
+                    key="pages"
+                    title={
+                        <span style={menuStyles.groupTitle}>
+                            {SECTION_ICONS.pages}
+                            Guides
+                        </span>
+                    }
+                >
+                    {filteredPages.map(page => (
+                        <Menu.Item key={page.slug}>
+                            <Link to={`/pages/${encodeURIComponent(page.slug)}`}>
+                                {page.title}
+                            </Link>
+                        </Menu.Item>
+                    ))}
+                </SubMenu>
+            </MenuContainer>
+        );
+    }
+
+    // Default: show overview
     return (
-        <MenuContainer 
-            searchText={searchText} 
+        <MenuContainer
+            searchText={searchText}
             onSearchChange={setSearchText}
-            openKeys={allTags}
+            openKeys={allKeys}
             styles={menuStyles}
             themeVars={themeVars}
         >
-            <Menu.Item key="1">Introduction</Menu.Item>
-            <Menu.Item key="2">Quick Start</Menu.Item>
-            <Menu.Item key="3">Installation</Menu.Item>
+            <Menu.Item key="intro">
+                <Link to="/">Overview</Link>
+            </Menu.Item>
         </MenuContainer>
     );
 };

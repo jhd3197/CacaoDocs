@@ -1,92 +1,97 @@
-export interface TypeArgument {
-    bg_color: string;
-    color: string;
-    description: string;
-    function_name: string;
-    emoji: string;
+// CacaoDocs v2 Type Definitions
+
+export interface ArgDoc {
+    name: string;
     type: string;
-    args: Record<string, FieldDefinition>;
-    note?: string;
-}
-
-export interface FieldDefinition {
-  bg_color: string;
-  color: string;
-  description: string;
-  emoji: string;
-  type: string;
-  note: string;
-}
-
-export interface ERNodeData {
-  label: string;
-  description?: string;
-  fields: Record<string, FieldDefinition>;
-}
-
-export interface TypeItem {
-    args: Record<string, TypeArgument>;
     description: string;
-    function_name: string;
-    function_source?: string;
-    inputs?: string[];
-    last_updated: string;
-    outputs?: string | null;
-    tag: string;
-    type: string;
+    default: string | null;
 }
 
-export interface ApiEndpoint {
-    description: string;
-    endpoint: string;
-    function_name: string;
-    function_source: string;
-    inputs: any[];
-    args?: Record<string, TypeArgument>;
-    method: string;
-    outputs: any;
-    last_updated: string;
-    responses: {
-        [key: string]: {
-            description: string;
-            example: string;
-        };
-    };
-    status: string;
-    tag: string;
+export interface ReturnDoc {
     type: string;
+    description: string;
+}
+
+export interface RaiseDoc {
+    type: string;
+    description: string;
+}
+
+export interface ParsedDocstring {
+    summary: string;
+    description: string;
+    args: ArgDoc[];
+    returns: ReturnDoc | null;
+    raises: RaiseDoc[];
+    examples: string[];
+    attributes: ArgDoc[];
+    notes: string[];
+}
+
+export interface MethodDoc {
+    name: string;
+    module: string;
+    signature: string;
+    docstring: ParsedDocstring;
+    is_async: boolean;
+    is_classmethod: boolean;
+    is_staticmethod: boolean;
+    is_property: boolean;
+    source: string;
+    line_number: number;
+    decorators: string[];
+}
+
+export interface FunctionDoc {
+    name: string;
+    module: string;
+    full_path: string;
+    signature: string;
+    docstring: ParsedDocstring;
+    is_async: boolean;
+    source: string;
+    line_number: number;
+    decorators: string[];
+}
+
+export interface ClassDoc {
+    name: string;
+    module: string;
+    full_path: string;
+    docstring: ParsedDocstring;
+    bases: string[];
+    methods: MethodDoc[];
+    source: string;
+    line_number: number;
+    decorators: string[];
+}
+
+export interface ModuleDoc {
+    name: string;
+    full_path: string;
+    file_path: string;
+    docstring: string;
+    classes: ClassDoc[];
+    functions: FunctionDoc[];
+}
+
+export interface PageDoc {
+    title: string;
+    slug: string;
+    content: string;
+    file_path: string;
+    order: number;
+}
+
+export interface Config {
+    title: string;
+    description: string;
     version: string;
-}
-
-export interface DocItem {
-    args: Record<string, TypeArgument>;
-    description: string;
-    function_name: string;
-    function_source: string;
-    inputs: string[];
-    method: string;
-    last_updated: string;
-    outputs: any;
-    returns: {
-        description: string;
-        full_type: string;
-        is_list: boolean;
-        is_type_ref: boolean;
-        type_name: string;
-    };
-    status: string;
-    tag: string;
-    type: string;
-    version: string;
-}
-
-interface Config {
-    description: string;
-    exclude_inputs: string[];
-    footer_text: string;
     logo_url: string;
     github_url: string;
-    tag_mappings: Record<string, string>;
+    footer_text: string;
+    google_analytics_id: string;
+    clarity_id: string;
     theme: {
         primary_color: string;
         secondary_color: string;
@@ -108,22 +113,14 @@ interface Config {
         home_page_card_bg_color: string;
         home_page_card_text_color: string;
         code_bg_color: string;
-        type_bg_color_1: string;
-        type_bg_color_2: string;
-        type_text_color: string;
     };
-    title: string;
-    type_mappings: Record<string, string>;
-    verbose: boolean;
-    version: string;
-    google_analytics_id: string;
-    clarity_id: string;
 }
 
 export interface AppData {
-    api: ApiEndpoint[];
-    docs: DocItem[];
-    types: TypeItem[];
+    modules: ModuleDoc[];
+    classes: ClassDoc[];
+    functions: FunctionDoc[];
+    pages: PageDoc[];
     config: Config;
 }
 
@@ -133,5 +130,26 @@ declare global {
     }
 }
 
-export interface TypeDefinition extends TypeItem {
+// Helper type for counting items
+export interface DocumentationStats {
+    moduleCount: number;
+    classCount: number;
+    functionCount: number;
+    methodCount: number;
+    pageCount: number;
+}
+
+export function getStats(data: AppData): DocumentationStats {
+    const methodCount = data.classes.reduce(
+        (sum, cls) => sum + cls.methods.length,
+        0
+    );
+
+    return {
+        moduleCount: data.modules.length,
+        classCount: data.classes.length,
+        functionCount: data.functions.length,
+        methodCount,
+        pageCount: data.pages.length,
+    };
 }

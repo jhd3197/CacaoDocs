@@ -6,89 +6,78 @@ import {
   Col,
   Card,
   Statistic,
-  List,
   Space,
   Button,
   theme
 } from 'antd';
 import {
+  AppstoreOutlined,
+  BlockOutlined,
+  FunctionOutlined,
   FileTextOutlined,
-  ApiOutlined,
-  CodeOutlined,
-  ClockCircleOutlined,
   ArrowRightOutlined
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import type { AppData } from '../../global';
+import { getStats } from '../../global';
 
 const { Title, Text } = Typography;
 const { Content } = Layout;
 const { useToken } = theme;
 
-
 interface HomeProps {
   data: AppData;
 }
 
-
-const DashboardHome: React.FC<HomeProps> = ({ data }) => {
+const Home: React.FC<HomeProps> = ({ data }) => {
   const { token } = useToken();
+  const stats = getStats(data);
 
-  const getRelativeTime = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - date.getTime());
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return 'Today';
-    if (diffDays === 1) return 'Yesterday';
-    if (diffDays < 7) return `${diffDays} days ago`;
-    if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
-    return `${Math.floor(diffDays / 365)} years ago`;
-  };
+  const cards = [
+    {
+      title: 'Modules',
+      count: stats.moduleCount,
+      suffix: 'Modules',
+      icon: <AppstoreOutlined style={{ fontSize: '40px', color: data.config.theme.home_page_card_text_color }} />,
+      link: '/modules',
+      linkText: 'Browse Modules',
+      show: stats.moduleCount > 0,
+    },
+    {
+      title: 'Classes',
+      count: stats.classCount,
+      suffix: 'Classes',
+      icon: <BlockOutlined style={{ fontSize: '40px', color: data.config.theme.home_page_card_text_color }} />,
+      link: '/classes',
+      linkText: 'View Classes',
+      show: stats.classCount > 0,
+    },
+    {
+      title: 'Functions',
+      count: stats.functionCount,
+      suffix: 'Functions',
+      icon: <FunctionOutlined style={{ fontSize: '40px', color: data.config.theme.home_page_card_text_color }} />,
+      link: '/functions',
+      linkText: 'Explore Functions',
+      show: stats.functionCount > 0,
+    },
+    {
+      title: 'Guides',
+      count: stats.pageCount,
+      suffix: 'Pages',
+      icon: <FileTextOutlined style={{ fontSize: '40px', color: data.config.theme.home_page_card_text_color }} />,
+      link: '/pages',
+      linkText: 'Read Guides',
+      show: stats.pageCount > 0,
+    },
+  ];
 
-  const getActivityTitle = (item: any) => {
-    switch (item.itemType) {
-      case 'api':
-        return `API Endpoint Updated ${item.method || ''} ${item.endpoint || item.function_name}`;
-      case 'type':
-        return `Type Definition Modified ${item.function_name}${item.args ? ` with ${Object.keys(item.args).length} parameters` : ''}`;
-      case 'doc':
-        return `Documentation Updated ${item.function_name}()`;
-      default:
-        return item.function_name || 'Untitled';
-    }
-  };
-
-  const recentActivity = [
-    ...data.api.map(item => ({ ...item, itemType: 'api' })),
-    ...data.docs.map(item => ({ ...item, itemType: 'doc' })),
-    ...data.types.map(item => ({ ...item, itemType: 'type' }))
-  ]
-  .filter(item => item.last_updated)
-  .sort((a, b) => {
-    return new Date(b.last_updated).getTime() - new Date(a.last_updated).getTime();
-  })
-  .slice(0, 3);
-
-  const getIconForType = (type: string) => {
-    switch (type) {
-      case 'api':
-        return <ApiOutlined style={{ color: token.colorPrimary }} />;
-      case 'type':
-        return <CodeOutlined style={{ color: token.colorPrimary }} />;
-      case 'doc':
-        return <FileTextOutlined style={{ color: token.colorPrimary }} />;
-      default:
-        return <ApiOutlined style={{ color: token.colorPrimary }} />;
-    }
-  };
+  const visibleCards = cards.filter(c => c.show);
 
   return (
-    <Layout style={{ 
+    <Layout style={{
       minHeight: '100vh',
-      background: `${data.config.theme.bg_color}`
+      background: data.config.theme.bg_color
     }}>
       <Content style={{ padding: '32px' }}>
         <Row gutter={[32, 32]}>
@@ -102,29 +91,40 @@ const DashboardHome: React.FC<HomeProps> = ({ data }) => {
                 boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
               }}
             >
-              <Title level={4} style={{ 
+              <Title level={4} style={{
                 margin: 0,
                 color: data.config.theme.home_page_welcome_text_color,
                 fontSize: '2rem',
                 fontWeight: 600
               }}>
-               {data.config.title}
+                {data.config.title}
               </Title>
-              <Text style={{ 
+              <Text style={{
                 color: data.config.theme.home_page_welcome_text_color,
                 fontSize: '1.1rem',
                 display: 'block',
                 marginTop: '8px'
               }}>
-               {data.config.description}
+                {data.config.description}
               </Text>
+              {data.config.version && (
+                <Text style={{
+                  color: data.config.theme.home_page_welcome_text_color,
+                  fontSize: '0.9rem',
+                  display: 'block',
+                  marginTop: '8px',
+                  opacity: 0.8
+                }}>
+                  Version {data.config.version}
+                </Text>
+              )}
             </Card>
           </Col>
 
-          {/* Action Cards */}
-          {data.api.length > 0 && (
-            <Col xs={24} md={8}>
-              <Link to="/api" style={{ display: 'block' }}>
+          {/* Stats Cards */}
+          {visibleCards.map(card => (
+            <Col xs={24} md={Math.floor(24 / Math.min(visibleCards.length, 4))} key={card.title}>
+              <Link to={card.link} style={{ display: 'block' }}>
                 <Card
                   hoverable
                   style={{
@@ -134,9 +134,11 @@ const DashboardHome: React.FC<HomeProps> = ({ data }) => {
                     border: '1px solid #f0f0f0',
                     overflow: 'hidden'
                   }}
-                  bodyStyle={{
-                    padding: '32px 24px',
-                    background: data.config.theme.home_page_card_bg_color
+                  styles={{
+                    body: {
+                      padding: '32px 24px',
+                      background: data.config.theme.home_page_card_bg_color
+                    }
                   }}
                 >
                   <Space direction="vertical" size="large" style={{ width: '100%' }}>
@@ -151,16 +153,18 @@ const DashboardHome: React.FC<HomeProps> = ({ data }) => {
                         justifyContent: 'center',
                         margin: '0 auto 20px'
                       }}>
-                        <ApiOutlined style={{ fontSize: '40px', color: data.config.theme.home_page_card_text_color}} />
+                        {card.icon}
                       </div>
-                      <Title level={3} style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>API Documentation</Title>
+                      <Title level={3} style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>
+                        {card.title}
+                      </Title>
                       <Statistic
-                        value={data.api.length}
-                        suffix="Endpoints"
+                        value={card.count}
+                        suffix={card.suffix}
                         valueStyle={{ color: data.config.theme.home_page_card_text_color, fontSize: '2rem' }}
                       />
                     </div>
-                    <Button 
+                    <Button
                       type="text"
                       style={{
                         color: data.config.theme.home_page_card_text_color,
@@ -169,177 +173,37 @@ const DashboardHome: React.FC<HomeProps> = ({ data }) => {
                         fontSize: '1rem'
                       }}
                     >
-                      Explore APIs <ArrowRightOutlined />
+                      {card.linkText} <ArrowRightOutlined />
                     </Button>
                   </Space>
                 </Card>
               </Link>
             </Col>
-          )}
+          ))}
 
-          {data.types.length > 0 && (
-            <Col xs={24} md={8}>
-              <Link to="/types" style={{ display: 'block' }}>
-                <Card
-                  hoverable
-                  style={{
-                    height: '100%',
-                    borderRadius: '16px',
-                    transition: 'all 0.3s ease',
-                    border: '1px solid #f0f0f0',
-                    overflow: 'hidden'
-                  }}
-                  bodyStyle={{
-                    padding: '32px 24px',
-                    background: data.config.theme.home_page_card_bg_color
-                  }}
-                >
-                  <Space direction="vertical" size="large" style={{ width: '100%' }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{
-                        background: `${token.colorPrimary}15`,
-                        borderRadius: '50%',
-                        width: '80px',
-                        height: '80px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        margin: '0 auto 20px'
-                      }}>
-                        <CodeOutlined style={{ fontSize: '40px', color: data.config.theme.home_page_card_text_color }} />
-                      </div>
-                      <Title level={3} style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>Type Definitions</Title>
-                      <Statistic
-                        value={data.types.length}
-                        suffix="Types"
-                        valueStyle={{ color: data.config.theme.home_page_card_text_color, fontSize: '2rem' }}
-                      />
-                    </div>
-                    <Button 
-                      type="text"
-                      style={{
-                        color: data.config.theme.home_page_card_text_color,
-                        padding: 0,
-                        height: 'auto',
-                        fontSize: '1rem'
-                      }}
-                    >
-                      View Types <ArrowRightOutlined />
-                    </Button>
-                  </Space>
-                </Card>
-              </Link>
-            </Col>
-          )}
-
-          {data.docs.length > 0 && (
-            <Col xs={24} md={8}>
-              <Link to="/docs" style={{ display: 'block' }}>
-                <Card
-                  hoverable
-                  style={{
-                    height: '100%',
-                    borderRadius: '16px',
-                    transition: 'all 0.3s ease',
-                    border: '1px solid #f0f0f0',
-                    overflow: 'hidden'
-                  }}
-                  bodyStyle={{
-                    padding: '32px 24px',
-                    background: data.config.theme.home_page_card_bg_color
-                  }}
-                >
-                  <Space direction="vertical" size="large" style={{ width: '100%' }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <div style={{
-                        background: `${token.colorPrimary}15`,
-                        borderRadius: '50%',
-                        width: '80px',
-                        height: '80px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        margin: '0 auto 20px'
-                      }}>
-                        <FileTextOutlined style={{ fontSize: '40px', color: data.config.theme.home_page_card_text_color }} />
-                      </div>
-                      <Title level={3} style={{ margin: '0 0 8px', fontSize: '1.5rem' }}>Documentation</Title>
-                      <Statistic
-                        value={data.docs.length}
-                        suffix="Pages"
-                        valueStyle={{ color: data.config.theme.home_page_card_text_color, fontSize: '2rem' }}
-                      />
-                    </div>
-                    <Button 
-                      type="text"
-                      style={{
-                        color: data.config.theme.home_page_card_text_color,
-                        padding: 0,
-                        height: 'auto',
-                        fontSize: '1rem'
-                      }}
-                    >
-                      Browse Docs <ArrowRightOutlined />
-                    </Button>
-                  </Space>
-                </Card>
-              </Link>
-            </Col>
-          )}
-
-          {/* Recent Activity Section */}
-          {recentActivity.length > 0 && (
+          {/* Quick Stats Summary */}
+          {stats.methodCount > 0 && (
             <Col span={24}>
               <Card
                 style={{
                   borderRadius: '16px',
                   boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)',
-                  color: data.config.theme.home_page_card_text_color
                 }}
-                bodyStyle={{
-                  padding: '0px 24px'
-                }}
-                title={
-                  <Space size="middle">
-                    <ClockCircleOutlined style={{ fontSize: '20px' }} />
-                    <span style={{ fontSize: '1.1rem', fontWeight: 600 }}>Recent Activity</span>
-                  </Space>
-                }
               >
-                <List
-                  itemLayout="horizontal"
-                  dataSource={recentActivity}
-                  renderItem={item => (
-                    <List.Item style={{ padding: '16px 0' }}>
-                      <List.Item.Meta
-                        avatar={
-                          <div style={{
-                            background: `${token.colorBgContainer}`,
-                            borderRadius: '8px',
-                            padding: '8px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}>
-                            {getIconForType(item.itemType)}
-                          </div>
-                        }
-                        title={
-                          <Text strong>
-                            {getActivityTitle(item)}
-                          </Text>
-                        }
-                        description={
-                          <Space direction="vertical" size={0}>
-                            <Text type="secondary">
-                              {getRelativeTime(item.last_updated)}
-                            </Text>
-                          </Space>
-                        }
-                      />
-                    </List.Item>
-                  )}
-                />
+                <Row gutter={[32, 16]}>
+                  <Col xs={12} md={6}>
+                    <Statistic title="Total Modules" value={stats.moduleCount} />
+                  </Col>
+                  <Col xs={12} md={6}>
+                    <Statistic title="Total Classes" value={stats.classCount} />
+                  </Col>
+                  <Col xs={12} md={6}>
+                    <Statistic title="Total Functions" value={stats.functionCount} />
+                  </Col>
+                  <Col xs={12} md={6}>
+                    <Statistic title="Total Methods" value={stats.methodCount} />
+                  </Col>
+                </Row>
               </Card>
             </Col>
           )}
@@ -349,4 +213,4 @@ const DashboardHome: React.FC<HomeProps> = ({ data }) => {
   );
 };
 
-export default DashboardHome;
+export default Home;

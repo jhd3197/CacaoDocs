@@ -1,10 +1,11 @@
 import React from 'react';
-import { Menu, Typography, Image, Button } from 'antd';
+import { Menu, Image, Button } from 'antd';
 import { Link, useLocation } from 'react-router-dom';
-import { 
-    HomeOutlined, 
-    ApiOutlined, 
-    BlockOutlined, 
+import {
+    HomeOutlined,
+    AppstoreOutlined,
+    BlockOutlined,
+    FunctionOutlined,
     FileTextOutlined,
     GithubOutlined,
     SearchOutlined
@@ -12,9 +13,6 @@ import {
 import logo from '../../assets/img/logo.png';
 
 import type { AppData } from '../../global';
-
-const { Title } = Typography;
-
 
 interface MainSidebarProps {
     apiData: AppData;
@@ -35,15 +33,20 @@ const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
         document.dispatchEvent(event);
     };
 
+    const hasModules = apiData.modules.length > 0;
+    const hasClasses = apiData.classes.length > 0;
+    const hasFunctions = apiData.functions.length > 0;
+    const hasPages = apiData.pages.length > 0;
+
     return (
-        <div style={{ 
+        <div style={{
             padding: '16px 0',
             height: '100%',
             display: 'flex',
             flexDirection: 'column'
         }}>
-            <div style={{ 
-                padding: '0 24px', 
+            <div style={{
+                padding: '0 24px',
                 marginBottom: '16px',
                 display: 'flex',
                 alignItems: 'center',
@@ -53,14 +56,14 @@ const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
                     alt="Logo"
                     preview={false}
                     style={{
-                        maxWidth: '100%', // Make logo responsive
+                        maxWidth: '100%',
                         objectFit: 'contain'
                     }}
                 />
             </div>
-            
-            <Button 
-                style={{ 
+
+            <Button
+                style={{
                     margin: '0 24px 16px',
                     display: 'flex',
                     alignItems: 'center',
@@ -70,11 +73,11 @@ const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
                 icon={<SearchOutlined />}
             >
                 <span style={{ marginRight: 'auto', marginLeft: 8 }}>Search</span>
-                <span style={{ 
+                <span style={{
                     opacity: 0.5,
                     fontSize: '12px',
-                    marginLeft: 8 
-                }}>⌃K</span>
+                    marginLeft: 8
+                }}>Ctrl+K</span>
             </Button>
 
             <Menu
@@ -85,32 +88,37 @@ const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
                 <Menu.Item key="/" icon={<HomeOutlined />}>
                     <Link to="/">Home</Link>
                 </Menu.Item>
-                {apiData.api.length > 0 && (
-                    <Menu.Item key="/api" icon={<ApiOutlined />}>
-                        <Link to="/api">API</Link>
+                {hasModules && (
+                    <Menu.Item key="/modules" icon={<AppstoreOutlined />}>
+                        <Link to="/modules">Modules</Link>
                     </Menu.Item>
                 )}
-                {apiData.types.length > 0 && (
-                    <Menu.Item key="/types" icon={<BlockOutlined />}>
-                        <Link to="/types">Types</Link>
+                {hasClasses && (
+                    <Menu.Item key="/classes" icon={<BlockOutlined />}>
+                        <Link to="/classes">Classes</Link>
                     </Menu.Item>
                 )}
-                {apiData.docs.length > 0 && (
-                    <Menu.Item key="/docs" icon={<FileTextOutlined />}>
-                        <Link to="/docs">Docs</Link>
+                {hasFunctions && (
+                    <Menu.Item key="/functions" icon={<FunctionOutlined />}>
+                        <Link to="/functions">Functions</Link>
+                    </Menu.Item>
+                )}
+                {hasPages && (
+                    <Menu.Item key="/pages" icon={<FileTextOutlined />}>
+                        <Link to="/pages">Guides</Link>
                     </Menu.Item>
                 )}
             </Menu>
-            
+
             <div style={{
                 padding: '16px 24px',
                 borderTop: '1px solid rgba(0, 0, 0, 0.06)',
                 textAlign: 'center'
             }}>
                 {apiData.config.github_url && (
-                    <a 
+                    <a
                         href={apiData.config.github_url}
-                        target="_blank" 
+                        target="_blank"
                         rel="noopener noreferrer"
                         style={{ fontSize: '24px', color: 'inherit' }}
                     >
@@ -118,8 +126,8 @@ const MainSidebar: React.FC<MainSidebarProps> = ({ apiData }) => {
                     </a>
                 )}
                 {apiData.config.footer_text && (
-                    <div 
-                        style={{ 
+                    <div
+                        style={{
                             marginTop: '8px',
                             fontSize: '12px',
                             color: 'rgba(0, 0, 0, 0.45)'

@@ -3,9 +3,13 @@ import { HashRouter as Router, Routes, Route } from 'react-router-dom';
 import { ConfigProvider, Spin } from 'antd';
 import CustomLayout from './components/Layout/Layout';
 import Home from './components/Pages/Home';
-import Api from './components/Pages/Api';
-import Types from './components/Pages/Types';
-import Docs from './components/Pages/Docs';
+import Modules from './components/Pages/Modules';
+import ModuleDetail from './components/Pages/ModuleDetail';
+import Classes from './components/Pages/Classes';
+import ClassDetail from './components/Pages/ClassDetail';
+import Functions from './components/Pages/Functions';
+import Pages from './components/Pages/Pages';
+import PageDetail from './components/Pages/PageDetail';
 import GoogleAnalytics from './components/GoogleAnalytics';
 import Clarity from './components/Clarity';
 import GlobalSearch from './components/Search/GlobalSearch';
@@ -14,50 +18,44 @@ import type { AppData } from './global';
 
 // Define a valid defaultConfig
 const defaultConfig = {
-  title: 'Welcome to CacaoDocs Dashboard',
-  description: 'Manage and explore your documentation with ease"',
-  exclude_inputs: [],
+  title: 'Documentation',
+  description: 'API and module documentation',
+  version: '1.0.0',
   logo_url: '',
   github_url: '',
   footer_text: '',
-  tag_mappings: {},
+  google_analytics_id: '',
+  clarity_id: '',
   theme: {
-    primary_color: '#FF8C00',
-    secondary_color: '#0D47A1',
-    bg_color: '#f0f4f8',
+    primary_color: '#8B4513',
+    secondary_color: '#D2691E',
+    bg_color: '#faf8f5',
     text_color: '#1a202c',
-    highlight_code_bg_color: '#ffe0b2',
-    highlight_code_border_color: '#ff8c00',
+    highlight_code_bg_color: '#fff8f0',
+    highlight_code_border_color: '#8B4513',
     sidebar_bg_color: '#ffffff',
     sidebar_text_color: '#1a202c',
-    sidebar_highlight_bg_color: '#0D47A1',
+    sidebar_highlight_bg_color: '#8B4513',
     sidebar_highlight_text_color: '#ffffff',
-    secondary_sidebar_bg_color: '#e0e7ff',
+    secondary_sidebar_bg_color: '#f5f0eb',
     secondary_sidebar_text_color: '#1a202c',
-    secondary_sidebar_highlight_bg_color: '#0D47A1',
+    secondary_sidebar_highlight_bg_color: '#8B4513',
     secondary_sidebar_highlight_text_color: '#ffffff',
-    home_page_welcome_bg_1: '#FF8C00',
-    home_page_welcome_bg_2: '#FFD580',
+    home_page_welcome_bg_1: '#8B4513',
+    home_page_welcome_bg_2: '#D2691E',
     home_page_welcome_text_color: '#ffffff',
     home_page_card_bg_color: '#ffffff',
     home_page_card_text_color: '#1a202c',
-    code_bg_color: '#f0f4f8',
-    type_bg_color_1: '#f0f4f8',
-    type_bg_color_2: '#e0e7ff',
-    type_text_color: '#1a202c',
+    code_bg_color: '#f5f0eb',
   },
-  type_mappings: {},
-  verbose: false,
-  version: '0.0.0',
-  google_analytics_id: '',
-  clarity_id: '',
 };
 
 const App: React.FC = () => {
-  const [apiData, setApiData] = useState<AppData>({ 
-    api: [], 
-    docs: [], 
-    types: [], 
+  const [apiData, setApiData] = useState<AppData>({
+    modules: [],
+    classes: [],
+    functions: [],
+    pages: [],
     config: defaultConfig
   });
   const [loading, setLoading] = useState(true);
@@ -71,19 +69,21 @@ const App: React.FC = () => {
             throw new Error(`HTTP error! status: ${response.status}`);
           }
           const jsonData = await response.json();
-          const transformedData = {
-            api: Array.isArray(jsonData.api) ? jsonData.api : (jsonData.api ? [jsonData.api] : []),
-            docs: Array.isArray(jsonData.docs) ? jsonData.docs : (jsonData.docs ? [jsonData.docs] : []),
-            types: Array.isArray(jsonData.types) ? jsonData.types : (jsonData.types ? [jsonData.types] : []),
-            config: jsonData.configs || defaultConfig
+          const transformedData: AppData = {
+            modules: Array.isArray(jsonData.modules) ? jsonData.modules : [],
+            classes: Array.isArray(jsonData.classes) ? jsonData.classes : [],
+            functions: Array.isArray(jsonData.functions) ? jsonData.functions : [],
+            pages: Array.isArray(jsonData.pages) ? jsonData.pages : [],
+            config: jsonData.config || jsonData.configs || defaultConfig
           };
           setApiData(transformedData);
         } catch (error) {
           console.error('Error fetching dev data:', error);
           setApiData({
-            api: [],
-            docs: [],
-            types: [],
+            modules: [],
+            classes: [],
+            functions: [],
+            pages: [],
             config: defaultConfig
           });
         } finally {
@@ -95,11 +95,12 @@ const App: React.FC = () => {
       // Production mode
       const globalData = (window as any).globalData;
       if (globalData) {
-        const transformedData = {
-          api: Array.isArray(globalData.api) ? globalData.api : [],
-          docs: Array.isArray(globalData.docs) ? globalData.docs : [],
-          types: Array.isArray(globalData.types) ? globalData.types : [],
-          config: globalData.configs || defaultConfig
+        const transformedData: AppData = {
+          modules: Array.isArray(globalData.modules) ? globalData.modules : [],
+          classes: Array.isArray(globalData.classes) ? globalData.classes : [],
+          functions: Array.isArray(globalData.functions) ? globalData.functions : [],
+          pages: Array.isArray(globalData.pages) ? globalData.pages : [],
+          config: globalData.config || globalData.configs || defaultConfig
         };
         setApiData(transformedData);
       }
@@ -120,21 +121,21 @@ const App: React.FC = () => {
     <ConfigProvider
       theme={{
         token: {
-          colorPrimary: apiData?.config?.theme?.primary_color || '#331201',
-          colorTextHeading: apiData?.config?.theme?.primary_color || '#331201',
-          colorLink: apiData?.config?.theme?.primary_color || '#331201',
+          colorPrimary: apiData?.config?.theme?.primary_color || '#8B4513',
+          colorTextHeading: apiData?.config?.theme?.primary_color || '#8B4513',
+          colorLink: apiData?.config?.theme?.primary_color || '#8B4513',
         },
         components: {
           Typography: {
             titleMarginTop: 0,
             titleMarginBottom: 0,
-            colorTextHeading: apiData?.config?.theme?.primary_color || '#331201',
+            colorTextHeading: apiData?.config?.theme?.primary_color || '#8B4513',
           },
           Menu: {
             colorItemTextHover: apiData?.config?.theme?.sidebar_highlight_text_color || '#fff',
             colorItemTextSelected: '#fff',
-            itemHoverBg: apiData?.config?.theme?.sidebar_highlight_bg_color || '#331201',
-            colorItemBgSelected: apiData?.config?.theme?.sidebar_highlight_bg_color || '#331201',
+            itemHoverBg: apiData?.config?.theme?.sidebar_highlight_bg_color || '#8B4513',
+            colorItemBgSelected: apiData?.config?.theme?.sidebar_highlight_bg_color || '#8B4513',
           },
         },
       }}
@@ -150,9 +151,13 @@ const App: React.FC = () => {
           <GlobalSearch data={apiData} />
           <Routes>
             <Route path="/" element={<Home data={apiData} />} />
-            <Route path="/api" element={<Api data={apiData} />} />
-            <Route path="/types" element={<Types data={apiData} />} />
-            <Route path="/docs" element={<Docs data={apiData}/>} />
+            <Route path="/modules" element={<Modules data={apiData} />} />
+            <Route path="/modules/:id" element={<ModuleDetail data={apiData} />} />
+            <Route path="/classes" element={<Classes data={apiData} />} />
+            <Route path="/classes/:id" element={<ClassDetail data={apiData} />} />
+            <Route path="/functions" element={<Functions data={apiData} />} />
+            <Route path="/pages" element={<Pages data={apiData} />} />
+            <Route path="/pages/:slug" element={<PageDetail data={apiData} />} />
           </Routes>
         </CustomLayout>
       </Router>

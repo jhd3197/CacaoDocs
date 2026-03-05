@@ -3,49 +3,27 @@ import FlexSearch from "flexsearch";
 import { Modal, Input, Card, Tag, Space, Radio } from "antd";
 import { useHotkeys } from "react-hotkeys-hook";
 import { useNavigate } from "react-router-dom";
+import type { AppData } from "../../global";
+
+type SearchItemType = "module" | "class" | "function" | "page";
 
 interface SearchItem {
-  type: "api" | "doc" | "type";
+  type: SearchItemType;
   name: string;
-  content: string;
+  fullPath: string;
   description: string;
-  tag?: string;
   path: string;
-  function_source?: string;  // <--- new property for code
-  method?: string;  // Add method field
+  source?: string;
+  module?: string;
 }
 
 interface GlobalSearchProps {
-  data: {
-    api: Array<{
-      endpoint: string;
-      function_name?: string;
-      description: string;
-      function_source?: string; // <--- code snippet
-      method?: string; // Add method
-    }>;
-    docs: Array<{
-      function_name: string;
-      tag?: string;
-      description: string;
-      function_source?: string; // <--- code snippet
-    }>;
-    types: Array<{
-      function_name: string;
-      tag?: string;
-      description: string;
-      function_source?: string; // <--- code snippet
-    }>;
-  };
+  data: AppData;
 }
 
-/**
- * highlightText: Simple substring highlight using <mark>.
- * For more robust highlighting, consider a library (e.g. react-highlight-words).
- */
 const highlightText = (text: string, query: string) => {
-  if (!query) return text;
-  const regex = new RegExp(`(${query})`, "gi");
+  if (!query || !text) return text;
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, "gi");
   const parts = text.split(regex);
 
   return parts.map((part, i) =>
@@ -57,18 +35,9 @@ const highlightText = (text: string, query: string) => {
   );
 };
 
-/**
- * getSnippet: Return a snippet of `fullText` around the first match of `query`.
- * E.g.  if snippetLen=60, we show ~30 chars before and 30 after the match.
- */
-const getSnippet = (
-  fullText: string,
-  query: string,
-  snippetLen = 60
-): string => {
+const getSnippet = (fullText: string, query: string, snippetLen = 60): string => {
   if (!fullText) return "";
   if (!query) {
-    // If no query, just show the first snippetLen chars
     const snippet = fullText.slice(0, snippetLen);
     return snippet + (fullText.length > snippetLen ? "..." : "");
   }
@@ -77,12 +46,10 @@ const getSnippet = (
   const index = lowerText.indexOf(lowerQuery);
 
   if (index < 0) {
-    // If we can't find the query, just take the first snippetLen chars
     const snippet = fullText.slice(0, snippetLen);
     return snippet + (fullText.length > snippetLen ? "..." : "");
   }
 
-  // Start ~half snippetLen before the match
   const half = Math.floor(snippetLen / 2);
   const start = Math.max(0, index - half);
   const end = Math.min(fullText.length, index + lowerQuery.length + half);
@@ -99,19 +66,21 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ data }) => {
   const [visible, setVisible] = useState(false);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchItem[]>([]);
-  const [filterType, setFilterType] = useState<"all" | "api" | "doc" | "type">("all");
+  const [filterType, setFilterType] = useState<"all" | SearchItemType>("all");
   const [searchMode, setSearchMode] = useState<"description" | "code">("description");
 
   const navigate = useNavigate();
 
-  const getTypeColor = (type: string) => {
+  const getTypeColor = (type: SearchItemType) => {
     switch (type) {
-      case "api":
+      case "module":
         return { color: "#1890ff", bg: "#4892b5" };
-      case "doc":
-        return { color: "#52c41a", bg: "#85aa5f" };
-      case "type":
+      case "class":
         return { color: "#722ed1", bg: "#9e7cb5" };
+      case "function":
+        return { color: "#52c41a", bg: "#85aa5f" };
+      case "page":
+        return { color: "#fa8c16", bg: "#d4a35c" };
       default:
         return { color: "#000000", bg: "#b66767" };
     }
@@ -119,100 +88,72 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ data }) => {
 
   const handleItemClick = (item: SearchItem) => {
     setVisible(false);
-    
-    setTimeout(() => {
-      const endpointType = item.type === 'api' ? 'api' : 
-                          item.type === 'type' ? 'types' : 'docs';
-      
-      const targetHash = item.path.split('#').slice(1).join('#');
-      const cleanHash = targetHash.replace(/^\/(?:api|types|docs)#/, '');
-      
-      // Check if we're on GitHub Pages
-      const isGitHubPages = window.location.hostname.includes('.github.io');
-      let basePath = '';
-      
-      if (isGitHubPages) {
-        // Extract repository name from pathname
-        const pathParts = window.location.pathname.split('/');
-        const repoName = pathParts[1]; // This will be 'CacaoDocs' in your case
-        basePath = `/${repoName}`;
-      }
-      
-      const newPath = `${basePath}/#/${endpointType}#${cleanHash}`;
-      
-      // Use replace instead of pushState for more reliable hash changes
-      window.location.replace(newPath);
-      
-      // Dispatch custom event with cleaned hash and type
-      const navigationEvent = new CustomEvent('navigationRequest', {
-        detail: { hash: cleanHash, type: endpointType }
-      });
-      window.dispatchEvent(navigationEvent);
-    }, 100);
+    navigate(item.path);
   };
 
-  // Prebuild 2 indexes: one for normal (description) and one for code
   const indexDescription = useMemo(() => FlexSearch.create(), []);
   const indexCode = useMemo(() => FlexSearch.create(), []);
 
-  // Build the items array once
   const combinedItems = useMemo(() => {
     const items: SearchItem[] = [
-      ...data.api.map((x) => ({
-        type: "api" as const,
-        name: x.endpoint,
-        content: x.function_name || "",
-        description: x.description,
-        path: `/#/api#${x.endpoint}-${x.method}`, // Include method in path
-        tag: "API",
-        function_source: x.function_source,
-        method: x.method // Add method
+      ...data.modules.map((m) => ({
+        type: "module" as const,
+        name: m.name,
+        fullPath: m.full_path,
+        description: m.docstring || "",
+        path: `/modules/${encodeURIComponent(m.full_path)}`,
+        source: "",
+        module: m.full_path,
       })),
-      ...data.docs.map((x) => ({
-        type: "doc" as const,
-        name: x.function_name,
-        content: "",
-        description: x.description,
-        path: `/#/docs#${x.function_name}`,
-        tag: x.tag,
-        function_source: x.function_source
+      ...data.classes.map((c) => ({
+        type: "class" as const,
+        name: c.name,
+        fullPath: c.full_path,
+        description: c.docstring.summary || c.docstring.description || "",
+        path: `/classes/${encodeURIComponent(c.full_path)}`,
+        source: c.source,
+        module: c.module,
       })),
-      ...data.types.map((x) => ({
-        type: "type" as const,
-        name: x.function_name,
-        content: "",
-        description: x.description,
-        path: `/#/types#${x.function_name}`,
-        tag: x.tag,
-        function_source: x.function_source
+      ...data.functions.map((f) => ({
+        type: "function" as const,
+        name: f.name,
+        fullPath: f.full_path,
+        description: f.docstring.summary || f.docstring.description || "",
+        path: `/functions#function-${f.name}`,
+        source: f.source,
+        module: f.module,
+      })),
+      ...data.pages.map((p) => ({
+        type: "page" as const,
+        name: p.title,
+        fullPath: p.slug,
+        description: p.content.replace(/<[^>]*>/g, '').slice(0, 200),
+        path: `/pages/${encodeURIComponent(p.slug)}`,
+        source: "",
+        module: "",
       })),
     ];
     return items;
   }, [data]);
 
-  // On mount (and whenever data changes), rebuild both indexes
   useEffect(() => {
     indexDescription.clear();
     indexCode.clear();
 
     combinedItems.forEach((item, idx) => {
-      // Normal/description index
-      const textDesc = `${item.type} ${item.name} ${item.description} ${item.content}`;
+      const textDesc = `${item.type} ${item.name} ${item.fullPath} ${item.description}`;
       indexDescription.add(idx, textDesc);
 
-      // Code index (fallback to name if no code present)
-      const textCode = `${item.type} ${item.name} ${item.function_source || ""}`;
+      const textCode = `${item.type} ${item.name} ${item.source || ""}`;
       indexCode.add(idx, textCode);
     });
   }, [combinedItems, indexDescription, indexCode]);
 
-  // Hotkey Ctrl+K to open
   useHotkeys("ctrl+k", (event) => {
     event.preventDefault();
     setVisible(true);
   });
 
-  // Whenever query/filterType/searchMode changes, run search
   useEffect(() => {
     if (!query) {
       setResults([]);
@@ -220,17 +161,10 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ data }) => {
     }
 
     const performSearch = async () => {
-      // 1) pick which index to use
-      const activeIndex =
-        searchMode === "description" ? indexDescription : indexCode;
-
-      // 2) do the search
+      const activeIndex = searchMode === "description" ? indexDescription : indexCode;
       const foundIDs = await activeIndex.search(query);
-
-      // 3) map IDs back to items
       let matchedItems = foundIDs.map((idx) => combinedItems[idx as any]);
 
-      // 4) filter by type if needed
       if (filterType !== "all") {
         matchedItems = matchedItems.filter((item) => item.type === filterType);
       }
@@ -246,20 +180,21 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ data }) => {
       open={visible}
       footer={null}
       onCancel={() => setVisible(false)}
-      title="Global Search"
+      title="Search Documentation"
       width={600}
       maskClosable
-      bodyStyle={{
-        display: "flex",
-        flexDirection: "column",
-        maxHeight: "70vh",
-        padding: 0,
+      styles={{
+        body: {
+          display: "flex",
+          flexDirection: "column",
+          maxHeight: "70vh",
+          padding: 0,
+        }
       }}
     >
-      {/* Header area: search + filters */}
       <div style={{ padding: 16, borderBottom: "1px solid #f0f0f0" }}>
         <Input
-          placeholder="Type to search..."
+          placeholder="Search modules, classes, functions..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           autoFocus
@@ -268,18 +203,17 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ data }) => {
         />
 
         <Space wrap>
-          {/* Type Filter */}
           <Radio.Group
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
           >
             <Radio value="all">All</Radio>
-            <Radio value="api">API</Radio>
-            <Radio value="doc">Doc</Radio>
-            <Radio value="type">Type</Radio>
+            <Radio value="module">Modules</Radio>
+            <Radio value="class">Classes</Radio>
+            <Radio value="function">Functions</Radio>
+            <Radio value="page">Pages</Radio>
           </Radio.Group>
 
-          {/* Search Mode (Description vs Code) */}
           <Radio.Group
             value={searchMode}
             onChange={(e) => setSearchMode(e.target.value)}
@@ -290,7 +224,6 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ data }) => {
         </Space>
       </div>
 
-      {/* Scrollable results area */}
       <div
         style={{
           flex: 1,
@@ -301,12 +234,9 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ data }) => {
         <Space direction="vertical" style={{ width: "100%" }}>
           {results.map((item, index) => {
             const typeColors = getTypeColor(item.type);
-
-            // If we're in "code" mode, show snippet from function_source
-            // Otherwise, show the item.description
             const snippetText =
               searchMode === "code"
-                ? getSnippet(item.function_source || "", query, 80)
+                ? getSnippet(item.source || "", query, 80)
                 : item.description;
 
             return (
@@ -327,18 +257,19 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ data }) => {
                     >
                       {item.type.toUpperCase()}
                     </Tag>
-                    {item.method && (
-                      <Tag color="#331201">{item.method}</Tag>
+                    {item.module && (
+                      <Tag color="blue">{item.module}</Tag>
                     )}
-                    {item.tag && <Tag color="blue">{item.tag}</Tag>}
                   </Space>
 
-                  {/* Name */}
                   <div style={{ fontWeight: "bold" }}>
                     {highlightText(item.name, query)}
                   </div>
 
-                  {/* Description or Code Snippet */}
+                  <div style={{ color: "#888", fontSize: "0.85em" }}>
+                    {item.fullPath}
+                  </div>
+
                   <div style={{ color: "#666", whiteSpace: "pre-wrap" }}>
                     {highlightText(snippetText, query)}
                   </div>
@@ -346,6 +277,12 @@ const GlobalSearch: React.FC<GlobalSearchProps> = ({ data }) => {
               </Card>
             );
           })}
+
+          {query && results.length === 0 && (
+            <div style={{ textAlign: "center", color: "#999", padding: 20 }}>
+              No results found for "{query}"
+            </div>
+          )}
         </Space>
       </div>
     </Modal>

@@ -1,74 +1,54 @@
 # CacaoDocs Configuration
-title: "Welcome to CacaoDocs Dashboard"
-description: "Manage and explore your documentation with ease"
-footer_text: "Made with CacaoDocs</br>&#x2764;"
+title: "CacaoDocs"
+description: "Generate beautiful documentation from Python docstrings"
+version: "2.0.0"
+footer_text: "Built with CacaoDocs"
 github_url: "https://github.com/jhd3197/CacaoDocs"
-version: "1.0.0"
-google_analytics_id: "G-4M2G9F5MMW"
-clarity_id: "ps9ys0le9n"
 
-# Logo configuration
-logo_url: ""
+# Optional: Analytics
+# google_analytics_id: "G-XXXXXXXXXX"
+# clarity_id: "xxxxxxxxxx"
 
-# Theme Settings 
+# Logo configuration (optional)
+# logo_url: "/path/to/logo.png"
+
+# Theme Settings
 theme:
-
   # General configuration
-  primary_color: "#4c1702"                     # Deep Chocolate Brown
-  secondary_color: "#6f4e37"                   # Milk Chocolate
-  bg_color: "#f1f1f1"                          # Creamy Beige
-  text_color: "#3d1c02"                        # Dark Cocoa
-  highlight_code_bg_color: "#d2a679"           # Caramel
-  highlight_code_border_color: "#6f4e37"       # Milk Chocolate
+  primary_color: "#8B4513"                      # Saddle Brown
+  secondary_color: "#D2691E"                    # Chocolate
+  bg_color: "#faf8f5"                           # Creamy White
+  text_color: "#1a202c"                         # Dark Text
+  highlight_code_bg_color: "#fff8f0"            # Light Cream
+  highlight_code_border_color: "#8B4513"        # Saddle Brown
 
   # Navigation bar configuration
-  sidebar_bg_color: "#fff"                   # Light Gray
-  sidebar_text_color: "#4c1702"                # Creamy Beige
-  sidebar_highlight_bg_color: "#6f4e37"        # Milk Chocolate
-  sidebar_highlight_text_color: "#ffffff"      # White
-  secondary_sidebar_bg_color: "#6f4e37"        # Milk Chocolate
-  secondary_sidebar_text_color: "#ffffff"       # White
-  secondary_sidebar_highlight_bg_color: "#d2a679" # Caramel
+  sidebar_bg_color: "#ffffff"                   # White
+  sidebar_text_color: "#1a202c"                 # Dark Text
+  sidebar_highlight_bg_color: "#8B4513"         # Saddle Brown
+  sidebar_highlight_text_color: "#ffffff"       # White
+  secondary_sidebar_bg_color: "#f5f0eb"         # Light Beige
+  secondary_sidebar_text_color: "#1a202c"       # Dark Text
+  secondary_sidebar_highlight_bg_color: "#8B4513" # Saddle Brown
   secondary_sidebar_highlight_text_color: "#ffffff" # White
 
   # Home page configuration
-  home_page_welcome_bg_1: "#6f4e37"            # Milk Chocolate
-  home_page_welcome_bg_2: "#a1866f"            # Light Brown
-  home_page_welcome_text_color: "#ffffff"      # White
-  home_page_card_bg_color: "#ffffff"           # White
-  home_page_card_text_color: "#3d1c02"         # Dark Cocoa
+  home_page_welcome_bg_1: "#8B4513"             # Saddle Brown
+  home_page_welcome_bg_2: "#D2691E"             # Chocolate
+  home_page_welcome_text_color: "#ffffff"       # White
+  home_page_card_bg_color: "#ffffff"            # White
+  home_page_card_text_color: "#1a202c"          # Dark Text
 
-  # Json Configuration
-  code_bg_color: "#2e1c0a"                      # Very Dark Brown
-  type_bg_color_1: "#6f4e37"                    # Milk Chocolate
-  type_bg_color_2: "#6f4e3740"                  # Milk Chocolate with 25% Opacity
-  type_text_color: "#3d1c02"                    # Dark Cocoa
+  # Code configuration
+  code_bg_color: "#f5f0eb"                      # Light Beige
 
-
-# Type mappings (how types are displayed in the UI)
-type_mappings:
-  api: "API"
-  types: "Types"
-  docs: "Docs"
-
-# Tag mappings (how tags are displayed in the UI)
-tag_mappings:
-  users: "Users"
-  models: "Models"
-  auth: "Authentication"
-  general: "General"
-
-# Pages
-pages:
-  - title: "Home"
-    page: "home.md"
-    type: "page"
-  - title: "API"
-    page: "api.md"
-    type: "api"
-  - title: "Types"
-    page: "types.md"
-    type: "types"
-  - title: "Docs"
-    page: "docs.md"
-    type: "docs"
+# Patterns to exclude from scanning
+exclude_patterns:
+  - "__pycache__"
+  - ".venv"
+  - "venv"
+  - ".git"
+  - "node_modules"
+  - "build"
+  - "dist"
+  - "*.egg-info"
