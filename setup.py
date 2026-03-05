@@ -9,17 +9,14 @@ long_description = (HERE / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="cacaodocs",
-    version='0.2.0',
+    version='0.3.0',
     author="Juan Denis",
     author_email="juan@vene.co",
-    description="Generate beautiful documentation from Python docstrings.",
+    description="Generate documentation from Python docstrings, powered by Cacao.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/jhd3197/CacaoDocs",
-    packages=find_packages(),
-    package_data={
-        'cacaodocs': ['frontend/build/**/*'],
-    },
+    packages=find_packages(exclude=["old", "old.*"]),
     include_package_data=True,
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -37,6 +34,7 @@ setup(
         "click>=8.0.0",
         "PyYAML>=6.0",
         "Markdown>=3.4",
+        "cacao>=2.0.8",
     ],
     entry_points={
         'console_scripts': [

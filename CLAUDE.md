@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-CacaoDocs v2 is a Sphinx-like CLI tool that scans Python files, parses Google-style docstrings, and generates static HTML documentation.
+CacaoDocs is a Sphinx-like CLI tool that scans Python files, parses Google-style docstrings, and generates interactive documentation apps powered by [Cacao](https://github.com/cacao-research/Cacao).
+
+Instead of generating static HTML, CacaoDocs generates a Cacao app (`app.py`) that serves documentation with WebSocket-driven reactivity.
 
 ## Common Commands
 
@@ -16,7 +18,7 @@ cacaodocs build ./my-project -o ./docs  # Build docs from any Python project
 
 ### Serving Documentation
 ```bash
-cacaodocs serve ./docs                  # Serve docs locally on port 8000
+cacaodocs serve ./docs                  # Serve docs via Cacao (port 1502)
 cacaodocs serve ./docs -p 3000          # Use custom port
 ```
 
@@ -24,14 +26,6 @@ cacaodocs serve ./docs -p 3000          # Use custom port
 ```bash
 cacaodocs init                          # Create default cacao.yaml
 cacaodocs init -o myconfig.yaml         # Create with custom name
-```
-
-### Frontend Development
-```bash
-cd cacaodocs/frontend
-npm install
-npm start                   # Runs dev server on port 3005
-npm run build               # Build for production
 ```
 
 ### Installing Package
@@ -46,18 +40,18 @@ pip install cacaodocs       # Install from PyPI
 - **`cli.py`** - Click CLI with `build`, `serve`, `init` commands
 - **`scanner.py`** - File discovery + AST extraction for Python/Markdown files
 - **`parser.py`** - Google-style docstring parser
-- **`builder.py`** - JSON builder + HTML generator
+- **`builder.py`** - Generates a Cacao app from parsed documentation
 - **`config.py`** - YAML configuration loader
 - **`types.py`** - Dataclasses for parsed documentation
-- **`frontend/`** - React/TypeScript UI (Ant Design, FlexSearch)
 
 ### Data Flow
 ```
-Python files → AST Scanner → Docstring Parser → JSON Builder → HTML Builder
+Python files → AST Scanner → Docstring Parser → JSON Builder → Cacao App Generator
      ↓                                                              ↓
-Markdown files ──────────────────────────────────────────────→ Inject into
-                                                               frontend build
+Markdown files ──────────────────────────────────────────────→ app.py + data.json
 ```
+
+The generated `app.py` uses Cacao's `app_shell` with `nav_sidebar` for navigation, rendering modules, classes, functions, and pages as interactive panels.
 
 ### Core Types (`types.py`)
 - **`ModuleDoc`** - Python module (name, path, docstring, classes, functions)
@@ -72,12 +66,8 @@ Markdown files ─────────────────────�
 title: "My Project"
 description: "API Documentation"
 version: "1.0.0"
+theme: "dark"
 github_url: "https://github.com/..."
-
-theme:
-  primary_color: "#8B4513"
-  sidebar_bg_color: "#ffffff"
-  # ... more theme options
 
 exclude_patterns:
   - "__pycache__"
@@ -111,19 +101,11 @@ def example_function(name: str, count: int = 1) -> list[str]:
     """
 ```
 
-### Frontend Routes
-```
-/              → Home (overview, stats)
-/modules       → Module list
-/modules/:id   → Module detail (classes, functions)
-/classes       → Class list
-/classes/:id   → Class detail (methods, attributes)
-/functions     → Function list
-/pages         → Markdown pages
-/pages/:slug   → Page content
-```
+### Old Code
+Previous React-based frontend code is preserved in `old/` for reference.
 
-### Frontend Components
-- **Layout/** - MainSidebar, SecondarySidebar, Layout wrapper
-- **Pages/** - Home, Modules, Classes, Functions, Pages + Detail views
-- **Search/** - GlobalSearch (Ctrl+K) with FlexSearch
+### Dependencies
+- **cacao** (>=2.0.0) - Reactive web framework for rendering docs
+- **click** - CLI framework
+- **PyYAML** - Configuration loading
+- **Markdown** - Markdown to HTML conversion

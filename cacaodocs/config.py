@@ -5,38 +5,16 @@ from typing import Any
 
 import yaml
 
+from .types import CustomDocTypeDef, CustomSectionDef
+
 
 DEFAULT_CONFIG = {
     "title": "Documentation",
     "description": "API Documentation",
     "version": "1.0.0",
-    "theme": {
-        "primary_color": "#8B4513",
-        "secondary_color": "#D2691E",
-        "bg_color": "#faf8f5",
-        "text_color": "#1a202c",
-        "highlight_code_bg_color": "#fff8f0",
-        "highlight_code_border_color": "#8B4513",
-        "sidebar_bg_color": "#ffffff",
-        "sidebar_text_color": "#1a202c",
-        "sidebar_highlight_bg_color": "#8B4513",
-        "sidebar_highlight_text_color": "#ffffff",
-        "secondary_sidebar_bg_color": "#f5f0eb",
-        "secondary_sidebar_text_color": "#1a202c",
-        "secondary_sidebar_highlight_bg_color": "#8B4513",
-        "secondary_sidebar_highlight_text_color": "#ffffff",
-        "home_page_welcome_bg_1": "#8B4513",
-        "home_page_welcome_bg_2": "#D2691E",
-        "home_page_welcome_text_color": "#ffffff",
-        "home_page_card_bg_color": "#ffffff",
-        "home_page_card_text_color": "#1a202c",
-        "code_bg_color": "#f5f0eb",
-    },
+    "theme": "dark",
     "logo_url": "",
     "github_url": "",
-    "footer_text": "Built with CacaoDocs",
-    "google_analytics_id": "",
-    "clarity_id": "",
     "exclude_patterns": [
         "__pycache__",
         ".venv",
@@ -53,6 +31,35 @@ DEFAULT_CONFIG = {
 }
 
 
+def _parse_custom_doc_types(raw: dict[str, Any]) -> list[CustomDocTypeDef]:
+    """Parse custom doc_types from config YAML.
+
+    Args:
+        raw: The doc_types dict from cacao.yaml.
+
+    Returns:
+        List of CustomDocTypeDef definitions.
+    """
+    result = []
+    for name, definition in raw.items():
+        sections = []
+        for sec in definition.get("sections", []):
+            if isinstance(sec, str):
+                sections.append(CustomSectionDef(name=sec))
+            elif isinstance(sec, dict):
+                sections.append(CustomSectionDef(
+                    name=sec.get("name", ""),
+                    format=sec.get("format", "text"),
+                ))
+        result.append(CustomDocTypeDef(
+            name=name,
+            label=definition.get("label", name.replace("_", " ").title()),
+            icon=definition.get("icon", "file"),
+            sections=sections,
+        ))
+    return result
+
+
 def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
     """Load configuration from YAML file.
 
@@ -66,7 +73,6 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
     config = DEFAULT_CONFIG.copy()
 
     if config_path is None:
-        # Search for config in current directory
         for name in ["cacao.yaml", "cacao.yml", ".cacao.yaml", ".cacao.yml"]:
             if os.path.exists(name):
                 config_path = name
@@ -76,20 +82,22 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
         with open(config_path, "r", encoding="utf-8") as f:
             user_config = yaml.safe_load(f) or {}
 
-        # Deep merge theme settings
-        if "theme" in user_config:
-            config["theme"] = {**config["theme"], **user_config["theme"]}
-            del user_config["theme"]
-
-        # Merge exclude patterns
         if "exclude_patterns" in user_config:
             config["exclude_patterns"] = list(set(
                 config["exclude_patterns"] + user_config["exclude_patterns"]
             ))
             del user_config["exclude_patterns"]
 
-        # Merge remaining config
+        # Parse custom doc_types into structured objects
+        if "doc_types" in user_config:
+            config["custom_doc_types"] = _parse_custom_doc_types(user_config["doc_types"])
+            config["doc_types_raw"] = user_config.pop("doc_types")
+
         config.update(user_config)
+
+    # Ensure custom_doc_types always exists
+    if "custom_doc_types" not in config:
+        config["custom_doc_types"] = []
 
     return config
 
@@ -105,20 +113,14 @@ title: "My Project Documentation"
 description: "API and module documentation"
 version: "1.0.0"
 
-# Theme customization
-theme:
-  primary_color: "#8B4513"
-  secondary_color: "#D2691E"
+# Theme: "dark" or "light"
+theme: "dark"
 
 # Optional: GitHub repository URL
 # github_url: "https://github.com/username/repo"
 
 # Optional: Custom logo URL
 # logo_url: "/path/to/logo.png"
-
-# Optional: Analytics
-# google_analytics_id: "G-XXXXXXXXXX"
-# clarity_id: "xxxxxxxxxx"
 
 # Patterns to exclude from scanning
 exclude_patterns:
@@ -129,6 +131,30 @@ exclude_patterns:
   - "node_modules"
   - "build"
   - "dist"
+
+# Custom doc types (optional)
+# Define your own docstring categories with custom sections.
+# doc_types:
+#   cli_command:
+#     label: "CLI Command"
+#     icon: "terminal"
+#     sections:
+#       - name: "Usage"
+#       - name: "Options"
+#         format: args
+#       - name: "Flags"
+#         format: args
+#       - name: "Examples"
+#         format: code
+#
+#   database_model:
+#     label: "Model"
+#     icon: "database"
+#     sections:
+#       - name: "Fields"
+#         format: args
+#       - name: "Indexes"
+#       - name: "Relations"
 '''
 
     with open(output_path, "w", encoding="utf-8") as f:
