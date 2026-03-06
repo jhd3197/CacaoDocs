@@ -151,21 +151,47 @@ def _extract_todos(source: str, file_path: str, module_path: str) -> list[TodoDo
     return todos
 
 
+def _ast_to_value(node: ast.expr) -> Any:
+    """Recursively convert an AST node to a Python value.
+
+    Supports constants, lists, dicts, and nested combinations.
+    Returns None for unsupported node types.
+    """
+    if isinstance(node, ast.Constant):
+        return node.value
+    if isinstance(node, ast.Name):
+        return {"True": True, "False": False, "None": None}.get(node.id)
+    if isinstance(node, ast.List):
+        return [_ast_to_value(el) for el in node.elts]
+    if isinstance(node, ast.Tuple):
+        return tuple(_ast_to_value(el) for el in node.elts)
+    if isinstance(node, ast.Dict):
+        return {
+            _ast_to_value(k): _ast_to_value(v)
+            for k, v in zip(node.keys, node.values)
+            if k is not None
+        }
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
+        val = _ast_to_value(node.operand)
+        if isinstance(val, (int, float)):
+            return -val
+    return None
+
+
 def _extract_doc_decorator(node: ast.FunctionDef | ast.AsyncFunctionDef) -> dict[str, Any]:
     """Extract metadata from @doc(...) or @cacaodocs.doc(...) decorator.
 
     Returns a dict of keyword args found on the decorator (empty if not present).
+    Supports nested dicts, lists, and constants.
     """
     for d in node.decorator_list:
         if not isinstance(d, ast.Call):
             continue
-        # Match @doc(...) or @cacaodocs.doc(...)
         func = d.func
         is_doc = False
         if isinstance(func, ast.Name) and func.id == "doc":
             is_doc = True
         elif isinstance(func, ast.Attribute) and func.attr == "doc":
-            # cacaodocs.doc(...)
             if isinstance(func.value, ast.Name) and func.value.id == "cacaodocs":
                 is_doc = True
 
@@ -176,19 +202,200 @@ def _extract_doc_decorator(node: ast.FunctionDef | ast.AsyncFunctionDef) -> dict
         for kw in d.keywords:
             if kw.arg is None:
                 continue
-            if isinstance(kw.value, ast.Constant):
-                result[kw.arg] = kw.value.value
-            elif isinstance(kw.value, ast.Name):
-                # Handle bare True/False/None (ast.Constant in 3.8+, but just in case)
-                name = kw.value.id
-                if name == "True":
-                    result[kw.arg] = True
-                elif name == "False":
-                    result[kw.arg] = False
-                elif name == "None":
-                    result[kw.arg] = None
+            result[kw.arg] = _ast_to_value(kw.value)
         return result
     return {}
+
+
+def _apply_doc_meta(parsed: "ParsedDocstring", meta: dict[str, Any]) -> None:
+    """Overlay @doc() decorator metadata onto a ParsedDocstring.
+
+    Decorator values override docstring-parsed values. Supports simplified
+    syntax that gets converted to proper types.
+
+    Simplified syntax examples:
+        description="Fetch a user"
+        args={"user_id": "The user ID"}
+        args={"user_id": {"type": "int", "description": "ID", "default": "0"}}
+        returns="User object"
+        returns={"type": "User", "description": "The user object"}
+        raises={"NotFoundError": "When user not found"}
+        examples=["get_user(42)"]
+        method="GET"
+        path="/users/{user_id}"
+        path_params={"user_id": "The user ID"}
+        query_params={"page": {"type": "int", "description": "Page number", "default": "1"}}
+        request_body={"name": {"type": "str", "description": "User name"}}
+        responses={200: "Success", 404: {"description": "Not found", "fields": {...}}}
+        headers={"Authorization": {"description": "Bearer token", "required": True}}
+        trigger="user.created"
+        payload={"user_id": {"type": "int", "description": "The user ID"}}
+        config_fields={"DEBUG": {"type": "bool", "default": "false", "env": "APP_DEBUG"}}
+    """
+    from .types import (
+        ArgDoc, ReturnDoc, RaiseDoc, ResponseDoc, HeaderDoc,
+        PayloadFieldDoc, ConfigFieldDoc, DocType,
+    )
+
+    # --- Simple string fields ---
+    if "description" in meta and meta["description"]:
+        parsed.summary = str(meta["description"])
+    if "method" in meta:
+        parsed.http_method = str(meta["method"]).upper()
+    if "path" in meta:
+        parsed.path = str(meta["path"])
+    if "trigger" in meta:
+        parsed.trigger = str(meta["trigger"])
+    if "doc_type" in meta:
+        try:
+            parsed.doc_type = DocType(meta["doc_type"])
+        except ValueError:
+            pass
+
+    # --- Args: dict of name -> str | dict ---
+    if "args" in meta and isinstance(meta["args"], dict):
+        parsed.args = []
+        for name, val in meta["args"].items():
+            if isinstance(val, str):
+                parsed.args.append(ArgDoc(name=str(name), type="", description=val))
+            elif isinstance(val, dict):
+                parsed.args.append(ArgDoc(
+                    name=str(name),
+                    type=val.get("type", ""),
+                    description=val.get("description", ""),
+                    default=val.get("default"),
+                    required=val.get("required"),
+                ))
+
+    # --- Returns: str | dict ---
+    if "returns" in meta:
+        val = meta["returns"]
+        if isinstance(val, str):
+            parsed.returns = ReturnDoc(type="", description=val)
+        elif isinstance(val, dict):
+            parsed.returns = ReturnDoc(
+                type=val.get("type", ""),
+                description=val.get("description", ""),
+            )
+
+    # --- Raises: dict of type -> str ---
+    if "raises" in meta and isinstance(meta["raises"], dict):
+        parsed.raises = [
+            RaiseDoc(type=str(k), description=str(v))
+            for k, v in meta["raises"].items()
+        ]
+
+    # --- Examples: list of str ---
+    if "examples" in meta and isinstance(meta["examples"], list):
+        parsed.examples = [str(e) for e in meta["examples"]]
+
+    # --- Notes: list of str ---
+    if "notes" in meta and isinstance(meta["notes"], list):
+        parsed.notes = [str(n) for n in meta["notes"]]
+
+    # --- Attributes: dict (same format as args) ---
+    if "attributes" in meta and isinstance(meta["attributes"], dict):
+        parsed.attributes = []
+        for name, val in meta["attributes"].items():
+            if isinstance(val, str):
+                parsed.attributes.append(ArgDoc(name=str(name), type="", description=val))
+            elif isinstance(val, dict):
+                parsed.attributes.append(ArgDoc(
+                    name=str(name),
+                    type=val.get("type", ""),
+                    description=val.get("description", ""),
+                    default=val.get("default"),
+                    required=val.get("required"),
+                ))
+
+    # --- API: path_params, query_params, request_body (same format as args) ---
+    for key in ("path_params", "query_params", "request_body"):
+        if key in meta and isinstance(meta[key], dict):
+            items = []
+            for name, val in meta[key].items():
+                if isinstance(val, str):
+                    items.append(ArgDoc(name=str(name), type="", description=val))
+                elif isinstance(val, dict):
+                    items.append(ArgDoc(
+                        name=str(name),
+                        type=val.get("type", ""),
+                        description=val.get("description", ""),
+                        default=val.get("default"),
+                        required=val.get("required"),
+                    ))
+            setattr(parsed, key, items)
+
+    # --- Responses: dict of status_code -> str | dict ---
+    if "responses" in meta and isinstance(meta["responses"], dict):
+        parsed.responses = []
+        for code, val in meta["responses"].items():
+            if isinstance(val, str):
+                parsed.responses.append(ResponseDoc(
+                    status_code=int(code), description=val,
+                ))
+            elif isinstance(val, dict):
+                fields = []
+                for fname, fval in val.get("fields", {}).items():
+                    if isinstance(fval, str):
+                        fields.append(ArgDoc(name=str(fname), type="", description=fval))
+                    elif isinstance(fval, dict):
+                        fields.append(ArgDoc(
+                            name=str(fname),
+                            type=fval.get("type", ""),
+                            description=fval.get("description", ""),
+                        ))
+                parsed.responses.append(ResponseDoc(
+                    status_code=int(code),
+                    description=val.get("description", ""),
+                    fields=fields,
+                ))
+
+    # --- Headers: dict of name -> str | dict ---
+    if "headers" in meta and isinstance(meta["headers"], dict):
+        parsed.headers = []
+        for name, val in meta["headers"].items():
+            if isinstance(val, str):
+                parsed.headers.append(HeaderDoc(name=str(name), description=val))
+            elif isinstance(val, dict):
+                parsed.headers.append(HeaderDoc(
+                    name=str(name),
+                    description=val.get("description", ""),
+                    required=bool(val.get("required", False)),
+                    example=val.get("example", ""),
+                ))
+
+    # --- Payload: dict of name -> dict (event type) ---
+    if "payload" in meta and isinstance(meta["payload"], dict):
+        parsed.payload = []
+        for name, val in meta["payload"].items():
+            if isinstance(val, str):
+                parsed.payload.append(PayloadFieldDoc(
+                    name=str(name), type="", description=val,
+                ))
+            elif isinstance(val, dict):
+                parsed.payload.append(PayloadFieldDoc(
+                    name=str(name),
+                    type=val.get("type", ""),
+                    description=val.get("description", ""),
+                ))
+
+    # --- Config fields: dict of name -> dict ---
+    if "config_fields" in meta and isinstance(meta["config_fields"], dict):
+        parsed.config_fields = []
+        for name, val in meta["config_fields"].items():
+            if isinstance(val, str):
+                parsed.config_fields.append(ConfigFieldDoc(
+                    name=str(name), type="", description=val,
+                ))
+            elif isinstance(val, dict):
+                parsed.config_fields.append(ConfigFieldDoc(
+                    name=str(name),
+                    type=val.get("type", ""),
+                    description=val.get("description", ""),
+                    default=val.get("default"),
+                    required=bool(val.get("required", False)),
+                    env_var=val.get("env", ""),
+                ))
 
 
 def _detect_deprecation(
@@ -560,6 +767,10 @@ class Scanner:
             if not parsed.path and route_path:
                 parsed.path = route_path
 
+        # Overlay @doc() metadata onto parsed docstring (decorator wins)
+        if doc_meta:
+            _apply_doc_meta(parsed, doc_meta)
+
         signature = self._build_signature(node)
         func_source = ast.get_source_segment(source, node) or ""
         calls = self._extract_calls(node)
@@ -620,6 +831,10 @@ class Scanner:
                 parsed.http_method = http_method
             if not parsed.path and route_path:
                 parsed.path = route_path
+
+        # Overlay @doc() metadata onto parsed docstring (decorator wins)
+        if doc_meta:
+            _apply_doc_meta(parsed, doc_meta)
 
         is_classmethod = "classmethod" in decorators
         is_staticmethod = "staticmethod" in decorators
