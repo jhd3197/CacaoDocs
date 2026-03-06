@@ -16,6 +16,7 @@ from .types import (
     MethodDoc,
     ModuleDoc,
     PageDoc,
+    ParsedDocstring,
     TodoDoc,
 )
 
@@ -115,7 +116,10 @@ def _cyclomatic_complexity(node: ast.AST) -> int:
             complexity += 1
         elif isinstance(child, ast.ExceptHandler):
             complexity += 1
-        elif isinstance(child, ast.With, ):
+        elif isinstance(
+            child,
+            ast.With,
+        ):
             complexity += 1
         elif isinstance(child, ast.Assert):
             complexity += 1
@@ -124,15 +128,15 @@ def _cyclomatic_complexity(node: ast.AST) -> int:
             complexity += len(child.values) - 1
         elif isinstance(child, ast.IfExp):
             complexity += 1
-        elif isinstance(child, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+        elif isinstance(
+            child, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)
+        ):
             complexity += sum(1 for _ in child.generators)
     return complexity
 
 
 # Pattern for TODO/FIXME/HACK/XXX in comments
-_TODO_PATTERN = re.compile(
-    r"#\s*(TODO|FIXME|HACK|XXX)\b[:\s]*(.*)", re.IGNORECASE
-)
+_TODO_PATTERN = re.compile(r"#\s*(TODO|FIXME|HACK|XXX)\b[:\s]*(.*)", re.IGNORECASE)
 
 
 def _extract_todos(source: str, file_path: str, module_path: str) -> list[TodoDoc]:
@@ -141,13 +145,15 @@ def _extract_todos(source: str, file_path: str, module_path: str) -> list[TodoDo
     for i, line in enumerate(source.splitlines(), start=1):
         match = _TODO_PATTERN.search(line)
         if match:
-            todos.append(TodoDoc(
-                tag=match.group(1).upper(),
-                text=match.group(2).strip(),
-                file_path=file_path,
-                line_number=i,
-                module=module_path,
-            ))
+            todos.append(
+                TodoDoc(
+                    tag=match.group(1).upper(),
+                    text=match.group(2).strip(),
+                    file_path=file_path,
+                    line_number=i,
+                    module=module_path,
+                )
+            )
     return todos
 
 
@@ -178,7 +184,9 @@ def _ast_to_value(node: ast.expr) -> Any:
     return None
 
 
-def _extract_doc_decorator(node: ast.FunctionDef | ast.AsyncFunctionDef) -> dict[str, Any]:
+def _extract_doc_decorator(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> dict[str, Any]:
     """Extract metadata from @doc(...) or @cacaodocs.doc(...) decorator.
 
     Returns a dict of keyword args found on the decorator (empty if not present).
@@ -207,7 +215,7 @@ def _extract_doc_decorator(node: ast.FunctionDef | ast.AsyncFunctionDef) -> dict
     return {}
 
 
-def _apply_doc_meta(parsed: "ParsedDocstring", meta: dict[str, Any]) -> None:
+def _apply_doc_meta(parsed: ParsedDocstring, meta: dict[str, Any]) -> None:
     """Overlay @doc() decorator metadata onto a ParsedDocstring.
 
     Decorator values override docstring-parsed values. Supports simplified
@@ -233,8 +241,14 @@ def _apply_doc_meta(parsed: "ParsedDocstring", meta: dict[str, Any]) -> None:
         config_fields={"DEBUG": {"type": "bool", "default": "false", "env": "APP_DEBUG"}}
     """
     from .types import (
-        ArgDoc, ReturnDoc, RaiseDoc, ResponseDoc, HeaderDoc,
-        PayloadFieldDoc, ConfigFieldDoc, DocType,
+        ArgDoc,
+        ReturnDoc,
+        RaiseDoc,
+        ResponseDoc,
+        HeaderDoc,
+        PayloadFieldDoc,
+        ConfigFieldDoc,
+        DocType,
     )
 
     # --- Simple string fields ---
@@ -259,13 +273,15 @@ def _apply_doc_meta(parsed: "ParsedDocstring", meta: dict[str, Any]) -> None:
             if isinstance(val, str):
                 parsed.args.append(ArgDoc(name=str(name), type="", description=val))
             elif isinstance(val, dict):
-                parsed.args.append(ArgDoc(
-                    name=str(name),
-                    type=val.get("type", ""),
-                    description=val.get("description", ""),
-                    default=val.get("default"),
-                    required=val.get("required"),
-                ))
+                parsed.args.append(
+                    ArgDoc(
+                        name=str(name),
+                        type=val.get("type", ""),
+                        description=val.get("description", ""),
+                        default=val.get("default"),
+                        required=val.get("required"),
+                    )
+                )
 
     # --- Returns: str | dict ---
     if "returns" in meta:
@@ -281,8 +297,7 @@ def _apply_doc_meta(parsed: "ParsedDocstring", meta: dict[str, Any]) -> None:
     # --- Raises: dict of type -> str ---
     if "raises" in meta and isinstance(meta["raises"], dict):
         parsed.raises = [
-            RaiseDoc(type=str(k), description=str(v))
-            for k, v in meta["raises"].items()
+            RaiseDoc(type=str(k), description=str(v)) for k, v in meta["raises"].items()
         ]
 
     # --- Examples: list of str ---
@@ -298,15 +313,19 @@ def _apply_doc_meta(parsed: "ParsedDocstring", meta: dict[str, Any]) -> None:
         parsed.attributes = []
         for name, val in meta["attributes"].items():
             if isinstance(val, str):
-                parsed.attributes.append(ArgDoc(name=str(name), type="", description=val))
+                parsed.attributes.append(
+                    ArgDoc(name=str(name), type="", description=val)
+                )
             elif isinstance(val, dict):
-                parsed.attributes.append(ArgDoc(
-                    name=str(name),
-                    type=val.get("type", ""),
-                    description=val.get("description", ""),
-                    default=val.get("default"),
-                    required=val.get("required"),
-                ))
+                parsed.attributes.append(
+                    ArgDoc(
+                        name=str(name),
+                        type=val.get("type", ""),
+                        description=val.get("description", ""),
+                        default=val.get("default"),
+                        required=val.get("required"),
+                    )
+                )
 
     # --- API: path_params, query_params, request_body (same format as args) ---
     for key in ("path_params", "query_params", "request_body"):
@@ -316,13 +335,15 @@ def _apply_doc_meta(parsed: "ParsedDocstring", meta: dict[str, Any]) -> None:
                 if isinstance(val, str):
                     items.append(ArgDoc(name=str(name), type="", description=val))
                 elif isinstance(val, dict):
-                    items.append(ArgDoc(
-                        name=str(name),
-                        type=val.get("type", ""),
-                        description=val.get("description", ""),
-                        default=val.get("default"),
-                        required=val.get("required"),
-                    ))
+                    items.append(
+                        ArgDoc(
+                            name=str(name),
+                            type=val.get("type", ""),
+                            description=val.get("description", ""),
+                            default=val.get("default"),
+                            required=val.get("required"),
+                        )
+                    )
             setattr(parsed, key, items)
 
     # --- Responses: dict of status_code -> str | dict ---
@@ -330,25 +351,34 @@ def _apply_doc_meta(parsed: "ParsedDocstring", meta: dict[str, Any]) -> None:
         parsed.responses = []
         for code, val in meta["responses"].items():
             if isinstance(val, str):
-                parsed.responses.append(ResponseDoc(
-                    status_code=int(code), description=val,
-                ))
+                parsed.responses.append(
+                    ResponseDoc(
+                        status_code=int(code),
+                        description=val,
+                    )
+                )
             elif isinstance(val, dict):
                 fields = []
                 for fname, fval in val.get("fields", {}).items():
                     if isinstance(fval, str):
-                        fields.append(ArgDoc(name=str(fname), type="", description=fval))
+                        fields.append(
+                            ArgDoc(name=str(fname), type="", description=fval)
+                        )
                     elif isinstance(fval, dict):
-                        fields.append(ArgDoc(
-                            name=str(fname),
-                            type=fval.get("type", ""),
-                            description=fval.get("description", ""),
-                        ))
-                parsed.responses.append(ResponseDoc(
-                    status_code=int(code),
-                    description=val.get("description", ""),
-                    fields=fields,
-                ))
+                        fields.append(
+                            ArgDoc(
+                                name=str(fname),
+                                type=fval.get("type", ""),
+                                description=fval.get("description", ""),
+                            )
+                        )
+                parsed.responses.append(
+                    ResponseDoc(
+                        status_code=int(code),
+                        description=val.get("description", ""),
+                        fields=fields,
+                    )
+                )
 
     # --- Headers: dict of name -> str | dict ---
     if "headers" in meta and isinstance(meta["headers"], dict):
@@ -357,45 +387,59 @@ def _apply_doc_meta(parsed: "ParsedDocstring", meta: dict[str, Any]) -> None:
             if isinstance(val, str):
                 parsed.headers.append(HeaderDoc(name=str(name), description=val))
             elif isinstance(val, dict):
-                parsed.headers.append(HeaderDoc(
-                    name=str(name),
-                    description=val.get("description", ""),
-                    required=bool(val.get("required", False)),
-                    example=val.get("example", ""),
-                ))
+                parsed.headers.append(
+                    HeaderDoc(
+                        name=str(name),
+                        description=val.get("description", ""),
+                        required=bool(val.get("required", False)),
+                        example=val.get("example", ""),
+                    )
+                )
 
     # --- Payload: dict of name -> dict (event type) ---
     if "payload" in meta and isinstance(meta["payload"], dict):
         parsed.payload = []
         for name, val in meta["payload"].items():
             if isinstance(val, str):
-                parsed.payload.append(PayloadFieldDoc(
-                    name=str(name), type="", description=val,
-                ))
+                parsed.payload.append(
+                    PayloadFieldDoc(
+                        name=str(name),
+                        type="",
+                        description=val,
+                    )
+                )
             elif isinstance(val, dict):
-                parsed.payload.append(PayloadFieldDoc(
-                    name=str(name),
-                    type=val.get("type", ""),
-                    description=val.get("description", ""),
-                ))
+                parsed.payload.append(
+                    PayloadFieldDoc(
+                        name=str(name),
+                        type=val.get("type", ""),
+                        description=val.get("description", ""),
+                    )
+                )
 
     # --- Config fields: dict of name -> dict ---
     if "config_fields" in meta and isinstance(meta["config_fields"], dict):
         parsed.config_fields = []
         for name, val in meta["config_fields"].items():
             if isinstance(val, str):
-                parsed.config_fields.append(ConfigFieldDoc(
-                    name=str(name), type="", description=val,
-                ))
+                parsed.config_fields.append(
+                    ConfigFieldDoc(
+                        name=str(name),
+                        type="",
+                        description=val,
+                    )
+                )
             elif isinstance(val, dict):
-                parsed.config_fields.append(ConfigFieldDoc(
-                    name=str(name),
-                    type=val.get("type", ""),
-                    description=val.get("description", ""),
-                    default=val.get("default"),
-                    required=bool(val.get("required", False)),
-                    env_var=val.get("env", ""),
-                ))
+                parsed.config_fields.append(
+                    ConfigFieldDoc(
+                        name=str(name),
+                        type=val.get("type", ""),
+                        description=val.get("description", ""),
+                        default=val.get("default"),
+                        required=bool(val.get("required", False)),
+                        env_var=val.get("env", ""),
+                    )
+                )
 
 
 def _detect_deprecation(
@@ -440,21 +484,24 @@ def _detect_deprecation(
     # Check docstring for deprecation lines
     if docstring:
         import re
+
         for line in docstring.splitlines():
             stripped = line.strip()
             # ".. deprecated:: 2.0" (Sphinx style)
-            sphinx = re.match(r'\.\.\s+deprecated::\s*(.+)', stripped, re.IGNORECASE)
+            sphinx = re.match(r"\.\.\s+deprecated::\s*(.+)", stripped, re.IGNORECASE)
             if sphinx:
                 return True, "", sphinx.group(1).strip()
             # "Deprecated since 2.0: message" or "Deprecated since 2.0"
-            since_match = re.match(r'deprecated\s+since\s+([^:]+?)(?::\s*(.*))?$', stripped, re.IGNORECASE)
+            since_match = re.match(
+                r"deprecated\s+since\s+([^:]+?)(?::\s*(.*))?$", stripped, re.IGNORECASE
+            )
             if since_match:
                 since = since_match.group(1).strip()
                 msg = (since_match.group(2) or "").strip()
                 return True, msg, since
             # "Deprecated: message"
             if stripped.lower().startswith("deprecated:"):
-                msg = stripped[len("deprecated:"):].strip()
+                msg = stripped[len("deprecated:") :].strip()
                 return True, msg, ""
             if stripped.lower() == "deprecated" or stripped.lower() == "deprecated.":
                 return True, "", ""

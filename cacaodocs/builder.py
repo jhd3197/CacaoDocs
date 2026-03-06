@@ -297,19 +297,23 @@ def _compute_changes(
         new = new_index.get(path)
 
         if new and not old:
-            changes.append({
-                "full_path": path,
-                "name": new["name"],
-                "doc_type": new["doc_type"],
-                "change": "new",
-            })
+            changes.append(
+                {
+                    "full_path": path,
+                    "name": new["name"],
+                    "doc_type": new["doc_type"],
+                    "change": "new",
+                }
+            )
         elif old and not new:
-            changes.append({
-                "full_path": path,
-                "name": old["name"],
-                "doc_type": old["doc_type"],
-                "change": "removed",
-            })
+            changes.append(
+                {
+                    "full_path": path,
+                    "name": old["name"],
+                    "doc_type": old["doc_type"],
+                    "change": "removed",
+                }
+            )
         elif old and new:
             sig_changed = old["signature_hash"] != new["signature_hash"]
             body_changed = old["body_hash"] != new["body_hash"]
@@ -321,12 +325,14 @@ def _compute_changes(
                 change_type = "body"
             else:
                 continue
-            changes.append({
-                "full_path": path,
-                "name": new["name"],
-                "doc_type": new["doc_type"],
-                "change": change_type,
-            })
+            changes.append(
+                {
+                    "full_path": path,
+                    "name": new["name"],
+                    "doc_type": new["doc_type"],
+                    "change": change_type,
+                }
+            )
 
     return changes
 
@@ -356,7 +362,7 @@ def _detect_breaking_changes(
                 ret_type = ""
                 arrow_pos = sig.rfind("->")
                 if arrow_pos != -1:
-                    ret_type = sig[arrow_pos + 2:].strip()
+                    ret_type = sig[arrow_pos + 2 :].strip()
                 index[item["full_path"]] = {
                     "name": item["name"],
                     "doc_type": item.get("doc_type", "function"),
@@ -376,7 +382,7 @@ def _detect_breaking_changes(
         if old["signature_hash"] == new["signature_hash"]:
             continue
 
-        details: list[dict[str, str]] = []
+        details: list[dict[str, Any]] = []
 
         old_params = old["params"]
         new_params = new["params"]
@@ -391,9 +397,13 @@ def _detect_breaking_changes(
             if name not in old_params:
                 has_default = new_params[name].get("default") is not None
                 if has_default:
-                    details.append({"type": "optional_arg_added", "arg": name, "breaking": False})
+                    details.append(
+                        {"type": "optional_arg_added", "arg": name, "breaking": False}
+                    )
                 else:
-                    details.append({"type": "required_arg_added", "arg": name, "breaking": True})
+                    details.append(
+                        {"type": "required_arg_added", "arg": name, "breaking": True}
+                    )
 
         # Type changes on existing params
         for name in old_params:
@@ -401,34 +411,40 @@ def _detect_breaking_changes(
                 old_type = old_params[name].get("type", "")
                 new_type = new_params[name].get("type", "")
                 if old_type and new_type and old_type != new_type:
-                    details.append({
-                        "type": "type_changed",
-                        "arg": name,
-                        "from": old_type,
-                        "to": new_type,
-                        "breaking": True,
-                    })
+                    details.append(
+                        {
+                            "type": "type_changed",
+                            "arg": name,
+                            "from": old_type,
+                            "to": new_type,
+                            "breaking": True,
+                        }
+                    )
 
         # Return type change
         old_ret = old.get("return_type", "")
         new_ret = new.get("return_type", "")
         if old_ret and new_ret and old_ret != new_ret:
-            details.append({
-                "type": "return_type_changed",
-                "from": old_ret,
-                "to": new_ret,
-                "breaking": True,
-            })
+            details.append(
+                {
+                    "type": "return_type_changed",
+                    "from": old_ret,
+                    "to": new_ret,
+                    "breaking": True,
+                }
+            )
 
         if details:
             is_breaking = any(d.get("breaking") for d in details)
-            breaking.append({
-                "full_path": path,
-                "name": new["name"],
-                "doc_type": new["doc_type"],
-                "is_breaking": is_breaking,
-                "details": details,
-            })
+            breaking.append(
+                {
+                    "full_path": path,
+                    "name": new["name"],
+                    "doc_type": new["doc_type"],
+                    "is_breaking": is_breaking,
+                    "details": details,
+                }
+            )
 
     return breaking
 
@@ -460,11 +476,10 @@ def _parse_signature_params(signature: str) -> list[dict[str, str]]:
         inner = inner[1:end]
 
     # Extract return type
-    ret_type = ""
     rest = signature.strip()
     arrow_pos = rest.rfind("->")
     if arrow_pos != -1:
-        ret_type = rest[arrow_pos + 2:].strip()
+        rest[arrow_pos + 2 :].strip()
 
     if not inner.strip():
         return params
@@ -504,14 +519,14 @@ def _parse_signature_params(signature: str) -> list[dict[str, str]]:
         # Split on = for default
         eq_pos = part.find("=")
         if eq_pos != -1:
-            default = part[eq_pos + 1:].strip()
+            default = part[eq_pos + 1 :].strip()
             part = part[:eq_pos].strip()
 
         # Split on : for type
         colon_pos = part.find(":")
         if colon_pos != -1:
             name = part[:colon_pos].strip()
-            ptype = part[colon_pos + 1:].strip()
+            ptype = part[colon_pos + 1 :].strip()
         else:
             name = part.strip()
 
@@ -519,7 +534,7 @@ def _parse_signature_params(signature: str) -> list[dict[str, str]]:
         if name in ("self", "cls"):
             continue
 
-        params.append({"name": name, "type": ptype, "default": default})
+        params.append({"name": name, "type": ptype, "default": default or ""})
 
     return params
 
@@ -580,13 +595,15 @@ def _compute_coverage(json_data: dict[str, Any]) -> dict[str, Any]:
 
             score = round(score, 1)
 
-            items.append({
-                "full_path": func.get("full_path", func["name"]),
-                "name": func["name"],
-                "doc_type": func.get("doc_type", "function"),
-                "score": score,
-                "checks": checks,
-            })
+            items.append(
+                {
+                    "full_path": func.get("full_path", func["name"]),
+                    "name": func["name"],
+                    "doc_type": func.get("doc_type", "function"),
+                    "score": score,
+                    "checks": checks,
+                }
+            )
             total_score += score
             count += 1
 
@@ -617,13 +634,15 @@ def _compute_coverage(json_data: dict[str, Any]) -> dict[str, Any]:
         score += 35 * method_ratio
         score = round(score, 1)
 
-        items.append({
-            "full_path": cls.get("full_path", cls["name"]),
-            "name": cls["name"],
-            "doc_type": "class",
-            "score": score,
-            "checks": checks,
-        })
+        items.append(
+            {
+                "full_path": cls.get("full_path", cls["name"]),
+                "name": cls["name"],
+                "doc_type": "class",
+                "score": score,
+                "checks": checks,
+            }
+        )
         total_score += score
         count += 1
 
@@ -674,11 +693,28 @@ def _detect_dead_code(json_data: dict[str, Any]) -> list[dict[str, Any]]:
         all_called.add(callee)
 
     # Exclusion patterns
-    skip_names = {"__init__", "__main__", "main", "__str__", "__repr__",
-                  "__eq__", "__hash__", "__len__", "__iter__", "__next__",
-                  "__enter__", "__exit__", "__call__", "__getattr__",
-                  "__setattr__", "__delattr__", "__getitem__", "__setitem__",
-                  "__contains__", "__bool__"}
+    skip_names = {
+        "__init__",
+        "__main__",
+        "main",
+        "__str__",
+        "__repr__",
+        "__eq__",
+        "__hash__",
+        "__len__",
+        "__iter__",
+        "__next__",
+        "__enter__",
+        "__exit__",
+        "__call__",
+        "__getattr__",
+        "__setattr__",
+        "__delattr__",
+        "__getitem__",
+        "__setitem__",
+        "__contains__",
+        "__bool__",
+    }
 
     for lst in ("functions", "api_endpoints"):
         for func in json_data.get(lst, []):
@@ -697,12 +733,14 @@ def _detect_dead_code(json_data: dict[str, Any]) -> list[dict[str, Any]]:
 
             # Check if anyone calls this
             if full_path not in all_called and name not in all_called:
-                dead.append({
-                    "full_path": full_path,
-                    "name": name,
-                    "doc_type": func.get("doc_type", "function"),
-                    "module": func.get("module", ""),
-                })
+                dead.append(
+                    {
+                        "full_path": full_path,
+                        "name": name,
+                        "doc_type": func.get("doc_type", "function"),
+                        "module": func.get("module", ""),
+                    }
+                )
 
     for cls in json_data.get("classes", []):
         for method in cls.get("methods", []):
@@ -714,12 +752,14 @@ def _detect_dead_code(json_data: dict[str, Any]) -> list[dict[str, Any]]:
 
             method_path = f"{cls.get('full_path', cls['name'])}.{name}"
             if method_path not in all_called and name not in all_called:
-                dead.append({
-                    "full_path": method_path,
-                    "name": name,
-                    "doc_type": "method",
-                    "module": cls.get("module", ""),
-                })
+                dead.append(
+                    {
+                        "full_path": method_path,
+                        "name": name,
+                        "doc_type": "method",
+                        "module": cls.get("module", ""),
+                    }
+                )
 
     return dead
 

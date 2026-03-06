@@ -83,8 +83,10 @@ def doc(**kwargs):
         def get_user(user_id: int) -> User:
             ...
     """
+
     def _identity(fn):
         return fn
+
     return _identity
 
 

@@ -270,11 +270,106 @@ jobs:
 
 > **Note:** Change `./src` in the build step to wherever your Python source code lives. The `--base-path` flag is needed so links work correctly under `https://username.github.io/repo-name/`.
 
+## The `@doc()` Decorator
+
+Instead of (or in addition to) docstrings, you can use the `@doc()` decorator to define documentation as structured data. This avoids fragile docstring parsing entirely — CacaoDocs reads the keyword arguments directly from the AST.
+
+```python
+from cacaodocs import doc
+
+@doc(
+    description="Fetch a user by ID.",
+    args={"user_id": {"type": "int", "description": "The user's unique identifier"}},
+    returns={"type": "User", "description": "The matching user"},
+    raises={"NotFoundError": "If user doesn't exist"},
+    deprecated="2.0",
+    category="Users",
+    version="1.0",
+)
+def get_user(user_id: int) -> User:
+    ...
+```
+
+The decorator is a **runtime no-op** — it just returns your function unchanged. Zero overhead. CacaoDocs reads the keyword arguments at scan time via AST, so there's nothing to parse or misparse.
+
+### Decorator vs Docstring
+
+You can use either approach, or both. When both exist, **decorator values win**.
+
+```python
+# Decorator only — no docstring needed
+@doc(description="Add two numbers.", args={"a": "First", "b": "Second"}, returns="The sum")
+def add(a, b):
+    return a + b
+
+# Supplement mode — docstring provides the basics, decorator adds metadata
+@doc(category="Utils", version="3.0", deprecated=True)
+def helper():
+    """Reticulate the splines.
+
+    Args:
+        count (int): Number of splines.
+    """
+    ...
+```
+
+### Supported kwargs
+
+**General:**
+
+| Kwarg | Type | Description |
+|-------|------|-------------|
+| `description` | `str` | Summary text |
+| `doc_type` | `str` | Override type: `"api"`, `"config"`, `"event"`, etc. |
+| `deprecated` | `bool \| str` | `True` or a since-version string like `"2.0"` |
+| `category` | `str` | Sidebar group name |
+| `version` | `str` | Version when added |
+| `hidden` | `bool` | Exclude from generated docs |
+
+**Function sections:**
+
+| Kwarg | Simple syntax | Full syntax |
+|-------|--------------|-------------|
+| `args` | `{"name": "desc"}` | `{"name": {"type": "str", "description": "...", "default": "x"}}` |
+| `returns` | `"description"` | `{"type": "User", "description": "..."}` |
+| `raises` | `{"ValueError": "when bad"}` | — |
+| `examples` | `["example()"]` | — |
+| `notes` | `["Note text"]` | — |
+| `attributes` | Same as `args` | Same as `args` |
+
+**API sections:**
+
+| Kwarg | Type | Description |
+|-------|------|-------------|
+| `method` | `str` | HTTP method (`"GET"`, `"POST"`, etc.) |
+| `path` | `str` | Route path (`"/users/{id}"`) |
+| `path_params` | `dict` | Same format as `args` |
+| `query_params` | `dict` | Same format as `args` |
+| `request_body` | `dict` | Same format as `args` |
+| `responses` | `dict` | `{200: "OK"}` or `{200: {"description": "...", "fields": {...}}}` |
+| `headers` | `dict` | `{"Auth": "desc"}` or `{"Auth": {"description": "...", "required": True}}` |
+
+**Event sections:**
+
+| Kwarg | Type | Description |
+|-------|------|-------------|
+| `trigger` | `str` | Event trigger name |
+| `payload` | `dict` | `{"field": {"type": "int", "description": "..."}}` |
+
+**Config sections:**
+
+| Kwarg | Type | Description |
+|-------|------|-------------|
+| `config_fields` | `dict` | `{"KEY": {"type": "bool", "default": "false", "env": "APP_KEY"}}` |
+
 ## Features
 
+- **`@doc()` Decorator** — Structured metadata as an alternative to docstrings
 - **Doc Types** — Function, API, Class, Page, Config, Event, and Custom types
 - **Auto-Detection** — Flask/FastAPI/Django endpoints detected from decorators
+- **Deprecation Tracking** — From decorators, docstrings, or `@doc(deprecated="2.0")`
 - **Call Map** — Visualize function call relationships across your codebase
+- **Dashboard** — Coverage scores, complexity hotspots, TODOs, dead code detection
 - **Interactive App** — Generated docs are a live Cacao app, not static HTML
 - **Google-style Docstrings** — Extended with API, config, and event sections
 - **Custom Types** — Define your own doc types via `cacao.yaml`
