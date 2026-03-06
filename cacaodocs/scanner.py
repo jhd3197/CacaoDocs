@@ -1,6 +1,8 @@
 """File discovery and AST parsing for Python source files."""
+
 import ast
 import fnmatch
+import hashlib
 import os
 import re
 from pathlib import Path
@@ -14,7 +16,7 @@ from .types import (
     MethodDoc,
     ModuleDoc,
     PageDoc,
-    ParsedDocstring,
+    TodoDoc,
 )
 
 # Decorator patterns that indicate an API endpoint
@@ -64,6 +66,103 @@ def _extract_route_path(node: ast.expr) -> str:
         if isinstance(first_arg, ast.Constant) and isinstance(first_arg.value, str):
             return first_arg.value
     return ""
+
+
+def _hash_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    """Hash the function signature: name, args, defaults, return annotation, decorators."""
+    parts = [node.name]
+    parts.append(ast.dump(node.args))
+    if node.returns:
+        parts.append(ast.dump(node.returns))
+    for d in node.decorator_list:
+        parts.append(ast.dump(d))
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
+
+
+def _hash_body(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    """Hash the function body (excluding the docstring)."""
+    body = list(node.body)
+    # Skip the docstring node (first Expr with a Constant string)
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        body = body[1:]
+    parts = [ast.dump(stmt) for stmt in body]
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
+
+
+def _hash_class_signature(node: ast.ClassDef) -> str:
+    """Hash the class signature: name, bases, decorators."""
+    parts = [node.name]
+    for base in node.bases:
+        parts.append(ast.dump(base))
+    for d in node.decorator_list:
+        parts.append(ast.dump(d))
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
+
+
+def _cyclomatic_complexity(node: ast.AST) -> int:
+    """Calculate cyclomatic complexity of an AST node.
+
+    Starts at 1 and increments for each branch point.
+    """
+    complexity = 1
+    for child in ast.walk(node):
+        if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor)):
+            complexity += 1
+        elif isinstance(child, ast.ExceptHandler):
+            complexity += 1
+        elif isinstance(child, ast.With, ):
+            complexity += 1
+        elif isinstance(child, ast.Assert):
+            complexity += 1
+        elif isinstance(child, ast.BoolOp):
+            # each `and`/`or` adds a branch
+            complexity += len(child.values) - 1
+        elif isinstance(child, ast.IfExp):
+            complexity += 1
+        elif isinstance(child, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+            complexity += sum(1 for _ in child.generators)
+    return complexity
+
+
+# Pattern for TODO/FIXME/HACK/XXX in comments
+_TODO_PATTERN = re.compile(
+    r"#\s*(TODO|FIXME|HACK|XXX)\b[:\s]*(.*)", re.IGNORECASE
+)
+
+
+def _extract_todos(source: str, file_path: str, module_path: str) -> list[TodoDoc]:
+    """Extract TODO/FIXME/HACK/XXX comments from source code."""
+    todos = []
+    for i, line in enumerate(source.splitlines(), start=1):
+        match = _TODO_PATTERN.search(line)
+        if match:
+            todos.append(TodoDoc(
+                tag=match.group(1).upper(),
+                text=match.group(2).strip(),
+                file_path=file_path,
+                line_number=i,
+                module=module_path,
+            ))
+    return todos
+
+
+def _hash_class_body(node: ast.ClassDef) -> str:
+    """Hash the class body (all statements)."""
+    body = list(node.body)
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        body = body[1:]
+    parts = [ast.dump(stmt) for stmt in body]
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
 
 
 class Scanner:
@@ -196,6 +295,8 @@ class Scanner:
                 func_doc = self._extract_function(node, module_path, source)
                 functions.append(func_doc)
 
+        todos = _extract_todos(source, str(file_path), module_path)
+
         return ModuleDoc(
             name=file_path.stem,
             full_path=module_path,
@@ -203,6 +304,7 @@ class Scanner:
             docstring=module_docstring,
             classes=classes,
             functions=functions,
+            todos=todos,
         )
 
     def scan_markdown(self, file_path: Path, base_path: Path) -> PageDoc:
@@ -216,7 +318,7 @@ class Scanner:
             PageDoc with extracted content.
         """
         try:
-            import markdown
+            import markdown  # type: ignore[import-untyped]
         except ImportError:
             markdown = None
 
@@ -232,7 +334,12 @@ class Scanner:
 
         try:
             rel_path = file_path.relative_to(base_path)
-            slug = str(rel_path.with_suffix("")).replace("\\", "/").replace(" ", "-").lower()
+            slug = (
+                str(rel_path.with_suffix(""))
+                .replace("\\", "/")
+                .replace(" ", "-")
+                .lower()
+            )
         except ValueError:
             slug = file_path.stem.replace(" ", "-").lower()
 
@@ -274,7 +381,9 @@ class Scanner:
 
         return ".".join(parts) if parts else file_path.stem
 
-    def _detect_doc_type(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> tuple[DocType, str, str]:
+    def _detect_doc_type(
+        self, node: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> tuple[DocType, str, str]:
         """Auto-detect doc type from decorators.
 
         Returns:
@@ -317,6 +426,8 @@ class Scanner:
             source=class_source,
             line_number=node.lineno,
             decorators=decorators,
+            signature_hash=_hash_class_signature(node),
+            body_hash=_hash_class_body(node),
         )
 
     def _extract_function(
@@ -353,6 +464,9 @@ class Scanner:
             decorators=decorators,
             calls=calls,
             doc_type=parsed.doc_type,
+            signature_hash=_hash_signature(node),
+            body_hash=_hash_body(node),
+            complexity=_cyclomatic_complexity(node),
         )
 
     def _extract_method(
@@ -396,6 +510,9 @@ class Scanner:
             decorators=decorators,
             calls=calls,
             doc_type=parsed.doc_type,
+            signature_hash=_hash_signature(node),
+            body_hash=_hash_body(node),
+            complexity=_cyclomatic_complexity(node),
         )
 
     def _extract_calls(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
@@ -451,11 +568,11 @@ class Scanner:
         elif args.kwonlyargs:
             parts.append("*")
 
-        num_kw_defaults = len(args.kw_defaults)
+        len(args.kw_defaults)
         for i, arg in enumerate(args.kwonlyargs):
             if args.kw_defaults[i] is not None:
                 parts.append(
-                    f"{self._format_arg(arg)}={self._get_default(args.kw_defaults[i])}"
+                    f"{self._format_arg(arg)}={self._get_default(args.kw_defaults[i])}"  # type: ignore[arg-type]
                 )
             else:
                 parts.append(self._format_arg(arg))

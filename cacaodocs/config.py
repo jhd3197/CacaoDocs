@@ -13,6 +13,7 @@ Config loading is delegated to Cacao's config system via:
 CacaoDocs then extracts the keys it cares about on top of what Cacao already
 handled. This avoids duplicating YAML parsing and keeps one config file.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -61,16 +62,20 @@ def _parse_custom_doc_types(raw: dict[str, Any]) -> list[CustomDocTypeDef]:
             if isinstance(sec, str):
                 sections.append(CustomSectionDef(name=sec))
             elif isinstance(sec, dict):
-                sections.append(CustomSectionDef(
-                    name=sec.get("name", ""),
-                    format=sec.get("format", "text"),
-                ))
-        result.append(CustomDocTypeDef(
-            name=name,
-            label=definition.get("label", name.replace("_", " ").title()),
-            icon=definition.get("icon", "file"),
-            sections=sections,
-        ))
+                sections.append(
+                    CustomSectionDef(
+                        name=sec.get("name", ""),
+                        format=sec.get("format", "text"),
+                    )
+                )
+        result.append(
+            CustomDocTypeDef(
+                name=name,
+                label=definition.get("label", name.replace("_", " ").title()),
+                icon=definition.get("icon", "file"),
+                sections=sections,
+            )
+        )
     return result
 
 
@@ -90,9 +95,18 @@ def _merge_from_yaml(config: dict[str, Any], yaml_data: dict[str, Any]) -> None:
         return
 
     # Simple string/scalar keys CacaoDocs cares about
-    for key in ("title", "description", "version", "github_url", "logo_url",
-                "footer_text", "google_analytics_id", "clarity_id",
-                "chat", "page_order"):
+    for key in (
+        "title",
+        "description",
+        "version",
+        "github_url",
+        "logo_url",
+        "footer_text",
+        "google_analytics_id",
+        "clarity_id",
+        "chat",
+        "page_order",
+    ):
         if key in yaml_data:
             config[key] = yaml_data[key]
 
@@ -106,9 +120,9 @@ def _merge_from_yaml(config: dict[str, Any], yaml_data: dict[str, Any]) -> None:
 
     # Exclude patterns — merge with defaults
     if "exclude_patterns" in yaml_data:
-        config["exclude_patterns"] = list(set(
-            config["exclude_patterns"] + yaml_data["exclude_patterns"]
-        ))
+        config["exclude_patterns"] = list(
+            set(config["exclude_patterns"] + yaml_data["exclude_patterns"])
+        )
 
     # Custom doc types
     if "doc_types" in yaml_data:
@@ -136,11 +150,13 @@ def load_config(config_path: str | Path | None = None) -> dict[str, Any]:
 
     if config_path is not None:
         # Explicit path — read it directly via Cacao's loader
-        from cacao.config import load_config_file
+        from cacao.config import load_config_file  # type: ignore[import-untyped]
+
         yaml_data = load_config_file(config_path)
     else:
         # Let Cacao find and load the config file
-        import cacao as c
+        import cacao as c  # type: ignore[import-untyped]
+
         yaml_data = c.get_yaml_config()
 
     _merge_from_yaml(config, yaml_data)
@@ -161,7 +177,7 @@ def create_default_config(output_path: str | Path = "cacao.yaml") -> None:
     Args:
         output_path: Path where to write the config file.
     """
-    config_content = '''# Cacao Configuration
+    config_content = """# Cacao Configuration
 # This file is read by Cacao and its plugins (e.g. CacaoDocs).
 
 # --- Cacao Framework Settings ---
@@ -224,7 +240,7 @@ exclude_patterns:
 #         format: args
 #       - name: "Indexes"
 #       - name: "Relations"
-'''
+"""
 
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(config_content)

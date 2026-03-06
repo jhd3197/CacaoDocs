@@ -28,24 +28,25 @@ cacaodocs build ./src -o ./docs
 cacaodocs serve ./docs
 ```
 
-## Doc Types
+## How Docstrings Work
 
-CacaoDocs introduces a **doc type** system — categories that change how docstrings are parsed and displayed. Types can be set explicitly with a `Type:` directive or auto-detected from decorators.
+CacaoDocs uses **Google-style docstrings** with one addition: a `Type:` directive that tells the parser what kind of thing you're documenting. If you don't specify a type, it defaults to `function`.
 
-### Built-in Types
+Here's the idea — you write normal docstrings, and CacaoDocs figures out what sections to parse based on the type:
 
-| Type | Description | Auto-detected from |
-|------|------------|-------------------|
-| `function` | Regular functions and methods | Default for all functions |
-| `api` | REST API endpoints | `@app.get`, `@router.post`, `@app.route`, etc. |
-| `class` | Python classes | Class definitions |
-| `page` | Markdown documentation | `.md` files |
-| `config` | Settings and environment variables | `Type: config` directive |
-| `event` | Webhooks, signals, pub/sub | `Type: event` directive |
+| Type | What it's for | How it's detected |
+|------|--------------|-------------------|
+| `function` | Regular functions and methods | Default — no directive needed |
+| `api` | REST API endpoints | Auto-detected from decorators like `@app.get`, `@router.post`, `@app.route` |
+| `class` | Python classes | Detected from class definitions |
+| `page` | Markdown documentation pages | `.md` files in your source directory |
+| `config` | App settings and env vars | Set with `Type: config` |
+| `event` | Webhooks, signals, pub/sub | Set with `Type: event` |
+| Custom | Anything you define | Set with `Type: your_type_name` |
 
 ### Function (default)
 
-Standard Google-style docstrings work out of the box:
+The most common type. Just write standard Google-style docstrings — no `Type:` directive needed:
 
 ```python
 def hash_password(password: str, salt: str = None) -> str:
@@ -67,9 +68,11 @@ def hash_password(password: str, salt: str = None) -> str:
     """
 ```
 
+**Available sections:** `Args`, `Returns`, `Raises`, `Examples`, `Notes`
+
 ### API Endpoints
 
-API endpoints are **auto-detected** from Flask, FastAPI, and Django REST decorators. You can also use additional API-specific sections:
+API endpoints are **auto-detected** from Flask, FastAPI, and Django REST decorators — you don't need to add `Type: api`. CacaoDocs sees `@app.get(...)` and knows it's an API endpoint, extracting the HTTP method and route path for you.
 
 ```python
 @app.get("/users/{user_id}")
@@ -92,16 +95,16 @@ def get_user(user_id: int):
     """
 ```
 
-Supported frameworks for auto-detection:
-- **FastAPI**: `@app.get`, `@app.post`, `@router.put`, `@router.delete`, etc.
+**Auto-detected decorators:**
+- **FastAPI**: `@app.get`, `@app.post`, `@router.put`, `@router.delete`, `@router.patch`
 - **Flask**: `@app.route`, `@blueprint.route`
 - **Django REST**: `@api_view`
 
-The HTTP method and route path are extracted automatically from the decorator.
+**Available sections:** `Path Params`, `Query Params`, `Request Body`, `Headers`, `Response (NNN)`
 
 ### Config
 
-Document application settings with type, default values, required flags, and environment variable mappings:
+For documenting application settings and environment variables. Use `Type: config` to enable config-specific parsing:
 
 ```python
 def load_settings():
@@ -117,9 +120,15 @@ def load_settings():
     """
 ```
 
+Each field supports modifiers inside the parentheses:
+- **type** — `str`, `int`, `bool`, etc.
+- **`default=value`** — Default value
+- **`required`** — Marks the field as required
+- **`env=VAR_NAME`** — Maps to an environment variable
+
 ### Event
 
-Document webhooks, signals, and event handlers:
+For documenting webhooks, signals, and event-driven patterns. Use `Type: event`:
 
 ```python
 def on_user_signup(data: dict):
@@ -136,9 +145,11 @@ def on_user_signup(data: dict):
     """
 ```
 
+**Available sections:** `Trigger` (inline directive), `Payload`
+
 ### Custom Types
 
-Define your own doc types in `cacao.yaml`:
+You can define your own doc types in `cacao.yaml`. Each custom type gets its own sections and display settings:
 
 ```yaml
 doc_types:
@@ -163,7 +174,7 @@ doc_types:
       - name: "Relations"
 ```
 
-Then use them in your docstrings:
+Then use them with the `Type:` directive:
 
 ```python
 def deploy():
@@ -197,6 +208,68 @@ exclude_patterns:
   - "node_modules"
 ```
 
+## Deploy to GitHub Pages
+
+CacaoDocs can export a static version of your docs and deploy them to GitHub Pages. Add this workflow to `.github/workflows/docs.yml`:
+
+```yaml
+name: Deploy Docs to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install cacaodocs
+          pip install "cacao>=2.1.0"
+
+      - name: Build docs
+        run: cacaodocs build ./src -o ./_build
+
+      - name: Export static site
+        run: cacaodocs export ./_build -o ./dist --base-path /${{ github.event.repository.name }}
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
+```
+
+**Setup steps:**
+1. Go to your repo's **Settings > Pages**
+2. Set **Source** to **GitHub Actions**
+3. Push the workflow file to `main` — it will build and deploy automatically
+
+> **Note:** Change `./src` in the build step to wherever your Python source code lives. The `--base-path` flag is needed so links work correctly under `https://username.github.io/repo-name/`.
+
 ## Features
 
 - **Doc Types** — Function, API, Class, Page, Config, Event, and Custom types
@@ -205,6 +278,7 @@ exclude_patterns:
 - **Interactive App** — Generated docs are a live Cacao app, not static HTML
 - **Google-style Docstrings** — Extended with API, config, and event sections
 - **Custom Types** — Define your own doc types via `cacao.yaml`
+- **Static Export** — Deploy to GitHub Pages or any static host
 
 ## Contributing
 

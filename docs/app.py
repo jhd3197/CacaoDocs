@@ -32,7 +32,7 @@ def get_user(user_id: int, include: str = None):
         >>> GET /users/42
         {"id": 42, "name": "Alice", "email": "alice@example.com"}
     """
-    return {"id": user_id, "name": "Alice"}
+    return {"id": user_id, "name": "Alice", "include": include}
 
 
 @app.post("/users")
@@ -55,7 +55,7 @@ async def create_user(name: str, email: str):
     Response (400):
         detail (str): Validation error message.
     """
-    return {"id": 1, "name": name}
+    return {"id": 1, "name": name, "email": email}
 
 
 @app.delete("/users/{user_id}")
@@ -75,4 +75,4 @@ def delete_user(user_id: int):
     Response (404):
         detail (str): User not found.
     """
-    return None
+    return {"deleted": user_id}
