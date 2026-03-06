@@ -158,6 +158,12 @@ def _serialize_method(method: MethodDoc) -> dict[str, Any]:
         "signature_hash": method.signature_hash,
         "body_hash": method.body_hash,
         "complexity": method.complexity,
+        "is_deprecated": method.is_deprecated,
+        "deprecation_message": method.deprecation_message,
+        "deprecation_since": method.deprecation_since,
+        "category": method.category,
+        "version": method.version,
+        "hidden": method.hidden,
     }
 
 
@@ -177,6 +183,12 @@ def _serialize_function(func: FunctionDoc) -> dict[str, Any]:
         "signature_hash": func.signature_hash,
         "body_hash": func.body_hash,
         "complexity": func.complexity,
+        "is_deprecated": func.is_deprecated,
+        "deprecation_message": func.deprecation_message,
+        "deprecation_since": func.deprecation_since,
+        "category": func.category,
+        "version": func.version,
+        "hidden": func.hidden,
     }
 
 
@@ -338,15 +350,18 @@ def _detect_breaking_changes(
         index: dict[str, dict[str, Any]] = {}
         for lst in ("functions", "api_endpoints"):
             for item in data.get(lst, []):
-                ds = item.get("docstring", {})
+                sig = item.get("signature", "")
+                sig_params = _parse_signature_params(sig)
+                # Extract return type from signature
+                ret_type = ""
+                arrow_pos = sig.rfind("->")
+                if arrow_pos != -1:
+                    ret_type = sig[arrow_pos + 2:].strip()
                 index[item["full_path"]] = {
                     "name": item["name"],
                     "doc_type": item.get("doc_type", "function"),
-                    "args": {
-                        a["name"]: a for a in ds.get("args", [])
-                    },
-                    "returns": ds.get("returns"),
-                    "signature": item.get("signature", ""),
+                    "params": {p["name"]: p for p in sig_params},
+                    "return_type": ret_type,
                     "signature_hash": item.get("signature_hash", ""),
                 }
         return index
@@ -363,28 +378,28 @@ def _detect_breaking_changes(
 
         details: list[dict[str, str]] = []
 
-        old_args = old["args"]
-        new_args = new["args"]
+        old_params = old["params"]
+        new_params = new["params"]
 
-        # Removed args
-        for name in old_args:
-            if name not in new_args:
+        # Removed params
+        for name in old_params:
+            if name not in new_params:
                 details.append({"type": "arg_removed", "arg": name, "breaking": True})
 
-        # New args
-        for name in new_args:
-            if name not in old_args:
-                has_default = new_args[name].get("default") is not None
+        # New params
+        for name in new_params:
+            if name not in old_params:
+                has_default = new_params[name].get("default") is not None
                 if has_default:
                     details.append({"type": "optional_arg_added", "arg": name, "breaking": False})
                 else:
                     details.append({"type": "required_arg_added", "arg": name, "breaking": True})
 
-        # Type changes on existing args
-        for name in old_args:
-            if name in new_args:
-                old_type = old_args[name].get("type", "")
-                new_type = new_args[name].get("type", "")
+        # Type changes on existing params
+        for name in old_params:
+            if name in new_params:
+                old_type = old_params[name].get("type", "")
+                new_type = new_params[name].get("type", "")
                 if old_type and new_type and old_type != new_type:
                     details.append({
                         "type": "type_changed",
@@ -395,13 +410,13 @@ def _detect_breaking_changes(
                     })
 
         # Return type change
-        old_ret = old.get("returns") or {}
-        new_ret = new.get("returns") or {}
-        if old_ret.get("type") and new_ret.get("type") and old_ret["type"] != new_ret["type"]:
+        old_ret = old.get("return_type", "")
+        new_ret = new.get("return_type", "")
+        if old_ret and new_ret and old_ret != new_ret:
             details.append({
                 "type": "return_type_changed",
-                "from": old_ret["type"],
-                "to": new_ret["type"],
+                "from": old_ret,
+                "to": new_ret,
                 "breaking": True,
             })
 
@@ -418,10 +433,101 @@ def _detect_breaking_changes(
     return breaking
 
 
+def _parse_signature_params(signature: str) -> list[dict[str, str]]:
+    """Extract parameter names, types, and defaults from a signature string.
+
+    Parses "(self, x: int, y: str = 'hi', *args, **kwargs) -> bool"
+    into a list of param dicts, excluding 'self' and 'cls'.
+    """
+    params: list[dict[str, str]] = []
+    if not signature:
+        return params
+
+    # Strip outer parens and return annotation
+    inner = signature.strip()
+    if inner.startswith("("):
+        # Find matching closing paren (handles nested generics)
+        depth = 0
+        end = 0
+        for i, ch in enumerate(inner):
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        inner = inner[1:end]
+
+    # Extract return type
+    ret_type = ""
+    rest = signature.strip()
+    arrow_pos = rest.rfind("->")
+    if arrow_pos != -1:
+        ret_type = rest[arrow_pos + 2:].strip()
+
+    if not inner.strip():
+        return params
+
+    # Split on commas, but respect brackets/parens
+    parts: list[str] = []
+    depth = 0
+    current: list[str] = []
+    for ch in inner:
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append("".join(current).strip())
+            current = []
+        else:
+            current.append(ch)
+    if current:
+        parts.append("".join(current).strip())
+
+    for part in parts:
+        part = part.strip()
+        if not part or part in ("/", "*"):
+            continue
+
+        name = part
+        ptype = ""
+        default = None
+
+        # Handle *args, **kwargs
+        if part.startswith("**"):
+            part = part[2:]
+        elif part.startswith("*"):
+            part = part[1:]
+
+        # Split on = for default
+        eq_pos = part.find("=")
+        if eq_pos != -1:
+            default = part[eq_pos + 1:].strip()
+            part = part[:eq_pos].strip()
+
+        # Split on : for type
+        colon_pos = part.find(":")
+        if colon_pos != -1:
+            name = part[:colon_pos].strip()
+            ptype = part[colon_pos + 1:].strip()
+        else:
+            name = part.strip()
+
+        # Skip self/cls
+        if name in ("self", "cls"):
+            continue
+
+        params.append({"name": name, "type": ptype, "default": default})
+
+    return params
+
+
 def _compute_coverage(json_data: dict[str, Any]) -> dict[str, Any]:
     """Compute documentation coverage scores.
 
-    Returns per-function scores and a project-wide summary.
+    Cross-references actual signature params with documented Args.
     """
     items: list[dict[str, Any]] = []
     total_score = 0.0
@@ -430,34 +536,49 @@ def _compute_coverage(json_data: dict[str, Any]) -> dict[str, Any]:
     for lst in ("functions", "api_endpoints"):
         for func in json_data.get(lst, []):
             ds = func.get("docstring", {})
-            score = 0.0
+            sig = func.get("signature", "")
+
+            sig_params = _parse_signature_params(sig)
+            sig_param_names = {p["name"] for p in sig_params}
+            doc_arg_names = {a["name"] for a in ds.get("args", [])}
+
+            has_docstring = bool(ds.get("summary"))
+            has_returns = ds.get("returns") is not None
+            has_examples = bool(ds.get("examples"))
+
+            # Args coverage: what fraction of signature params are documented?
+            if sig_param_names:
+                documented = sig_param_names & doc_arg_names
+                args_ratio = len(documented) / len(sig_param_names)
+                missing_args = sorted(sig_param_names - doc_arg_names)
+            else:
+                args_ratio = 1.0  # no params to document
+                missing_args = []
+
+            # Has return type in signature?
+            has_return_annotation = "->" in sig
+
             checks = {
-                "has_docstring": bool(ds.get("summary")),
-                "has_args_documented": True,
-                "has_returns": False,
-                "has_examples": bool(ds.get("examples")),
+                "has_docstring": has_docstring,
+                "args_documented": len(sig_param_names & doc_arg_names),
+                "args_total": len(sig_param_names),
+                "args_missing": missing_args,
+                "has_returns": has_returns,
+                "has_return_annotation": has_return_annotation,
+                "has_examples": has_examples,
             }
 
-            # Check if all actual params are documented
-            sig = func.get("signature", "")
-            # Count params from signature (rough: count commas + 1, minus self)
-            doc_args = {a["name"] for a in ds.get("args", [])}
-
-            # Check returns
-            checks["has_returns"] = ds.get("returns") is not None
-
-            # Score: docstring=40%, args=30%, returns=20%, examples=10%
-            if checks["has_docstring"]:
-                score += 40
-            if checks["has_args_documented"] and doc_args:
-                score += 30
-            elif not doc_args and not sig.strip("()"):
-                # No params to document
-                score += 30
-            if checks["has_returns"]:
+            # Score: docstring=35%, args=35%, returns=20%, examples=10%
+            score = 0.0
+            if has_docstring:
+                score += 35
+            score += 35 * args_ratio
+            if has_returns:
                 score += 20
-            if checks["has_examples"]:
+            if has_examples:
                 score += 10
+
+            score = round(score, 1)
 
             items.append({
                 "full_path": func.get("full_path", func["name"]),
@@ -471,29 +592,30 @@ def _compute_coverage(json_data: dict[str, Any]) -> dict[str, Any]:
 
     for cls in json_data.get("classes", []):
         ds = cls.get("docstring", {})
-        score = 0.0
-        checks = {
-            "has_docstring": bool(ds.get("summary")),
-            "has_attributes": bool(ds.get("attributes")),
-            "has_methods_documented": False,
-        }
 
-        # Check if methods have docstrings
+        has_docstring = bool(ds.get("summary"))
+        has_attributes = bool(ds.get("attributes"))
+
         methods = cls.get("methods", [])
         documented_methods = sum(
             1 for m in methods if m.get("docstring", {}).get("summary")
         )
-        if methods:
-            checks["has_methods_documented"] = documented_methods == len(methods)
+        method_ratio = (documented_methods / len(methods)) if methods else 1.0
 
-        if checks["has_docstring"]:
-            score += 50
-        if checks["has_attributes"]:
+        checks = {
+            "has_docstring": has_docstring,
+            "has_attributes": has_attributes,
+            "methods_documented": documented_methods,
+            "methods_total": len(methods),
+        }
+
+        score = 0.0
+        if has_docstring:
+            score += 40
+        if has_attributes:
             score += 25
-        if checks["has_methods_documented"]:
-            score += 25
-        elif not methods:
-            score += 25
+        score += 35 * method_ratio
+        score = round(score, 1)
 
         items.append({
             "full_path": cls.get("full_path", cls["name"]),
@@ -535,6 +657,71 @@ def _build_reverse_call_map(json_data: dict[str, Any]) -> dict[str, list[str]]:
 
     # Sort each list for determinism
     return {k: sorted(v) for k, v in sorted(called_by.items())}
+
+
+def _detect_dead_code(json_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Find functions/methods that are never called by anything internal.
+
+    Excludes: __init__, __main__, decorated endpoints, test functions,
+    and anything starting with 'main'.
+    """
+    called_by = json_data.get("called_by", {})
+    dead: list[dict[str, Any]] = []
+
+    # Build set of all callee names (both full_path and short name forms)
+    all_called: set[str] = set()
+    for callee in called_by:
+        all_called.add(callee)
+
+    # Exclusion patterns
+    skip_names = {"__init__", "__main__", "main", "__str__", "__repr__",
+                  "__eq__", "__hash__", "__len__", "__iter__", "__next__",
+                  "__enter__", "__exit__", "__call__", "__getattr__",
+                  "__setattr__", "__delattr__", "__getitem__", "__setitem__",
+                  "__contains__", "__bool__"}
+
+    for lst in ("functions", "api_endpoints"):
+        for func in json_data.get(lst, []):
+            name = func["name"]
+            full_path = func.get("full_path", name)
+
+            # Skip private, dunder, decorated (likely entry points), tests
+            if name.startswith("_"):
+                continue
+            if name in skip_names:
+                continue
+            if func.get("decorators"):
+                continue
+            if name.startswith("test"):
+                continue
+
+            # Check if anyone calls this
+            if full_path not in all_called and name not in all_called:
+                dead.append({
+                    "full_path": full_path,
+                    "name": name,
+                    "doc_type": func.get("doc_type", "function"),
+                    "module": func.get("module", ""),
+                })
+
+    for cls in json_data.get("classes", []):
+        for method in cls.get("methods", []):
+            name = method["name"]
+            if name.startswith("_") or name in skip_names:
+                continue
+            if method.get("decorators"):
+                continue
+
+            method_path = f"{cls.get('full_path', cls['name'])}.{name}"
+            if method_path not in all_called and name not in all_called:
+                dead.append({
+                    "full_path": method_path,
+                    "name": name,
+                    "doc_type": "method",
+                    "module": cls.get("module", ""),
+                })
+
+    return dead
 
 
 def _collect_todos(json_data: dict[str, Any]) -> list[dict[str, Any]]:
@@ -592,6 +779,9 @@ def build_json(
 
     # Flat TODO list
     json_data["todos"] = _collect_todos(json_data)
+
+    # Dead code detection
+    json_data["dead_code"] = _detect_dead_code(json_data)
 
     return json_data
 
@@ -1311,13 +1501,13 @@ _CONTENT_MODULES = [m for m in _ALL_MODULES
                     or any(_has_docstring(f) for f in m.get("functions", []))]
 
 _CLASSES = [c for c in _DATA["classes"] if _has_docstring(c)]
-_FUNCTIONS = [f for f in _DATA["functions"] if _has_docstring(f)]
-_API_ENDPOINTS = [e for e in _DATA.get("api_endpoints", []) if _has_docstring(e)]
+_FUNCTIONS = [f for f in _DATA["functions"] if _has_docstring(f) and not f.get("hidden")]
+_API_ENDPOINTS = [e for e in _DATA.get("api_endpoints", []) if _has_docstring(e) and not e.get("hidden")]
 
 # Filter methods within classes
 for cls in _CLASSES:
     cls["methods"] = [m for m in cls.get("methods", [])
-                      if _has_docstring(m) or m["name"] == "__init__"]
+                      if (_has_docstring(m) or m["name"] == "__init__") and not m.get("hidden")]
 
 for mod in _CONTENT_MODULES:
     mod["classes"] = [c for c in mod.get("classes", []) if _has_docstring(c)]
@@ -1546,11 +1736,46 @@ def _render_function_block(func):
     if func.get("is_property"):
         badges.append(("property", "success"))
 
+    # Deprecation
+    if func.get("is_deprecated"):
+        _dep_since = func.get("deprecation_since", "")
+        badges.append((f"DEPRECATED since {{_dep_since}}" if _dep_since else "DEPRECATED", "danger"))
+
+    # Version
+    _version = func.get("version", "")
+    if _version:
+        badges.append((f"v{{_version}}", "info"))
+
+    # Category
+    _category = func.get("category", "")
+    if _category:
+        badges.append((_category, "default"))
+
+    # Complexity
+    complexity = func.get("complexity", 1)
+    if complexity >= 15:
+        badges.append((f"complexity: {{complexity}}", "danger"))
+    elif complexity >= 8:
+        badges.append((f"complexity: {{complexity}}", "warning"))
+
     if badges:
         c.spacer(1)
         with c.row(gap=2, wrap=True):
             for label, color in badges:
                 c.badge(label, color=color)
+
+    # Deprecation warning
+    if func.get("is_deprecated"):
+        dep_msg = func.get("deprecation_message", "")
+        dep_since = func.get("deprecation_since", "")
+        c.spacer(1)
+        _dep_parts = []
+        if dep_since:
+            _dep_parts.append(f"since {{dep_since}}")
+        if dep_msg:
+            _dep_parts.append(dep_msg)
+        _dep_text = f"Deprecated ({{', '.join(_dep_parts)}})" if _dep_parts else "This function is deprecated."
+        c.text(_dep_text, color="danger")
 
     c.spacer(2)
     _render_docstring(ds)
@@ -1564,6 +1789,18 @@ def _render_function_block(func):
         with c.row(gap=2, wrap=True):
             for call_name in calls:
                 c.badge(call_name, color="default")
+
+    # Used by (reverse call map)
+    _called_by = _DATA.get("called_by", {{}})
+    full_path = func.get("full_path", name)
+    callers = _called_by.get(full_path, []) or _called_by.get(name, [])
+    if callers:
+        c.spacer(2)
+        c.title("Used By", level=4)
+        c.spacer(1)
+        with c.row(gap=2, wrap=True):
+            for caller in callers:
+                c.badge(caller, color="info")
 
     # Source
     if func.get("source"):
@@ -1642,6 +1879,21 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
                         badge=str(len(_API_ENDPOINTS)))
 
         c.nav_item("Call Map", key="callmap", icon="code")
+
+        with c.nav_group("Insights", icon="bar-chart"):
+            c.nav_item("Dashboard", key="dashboard", icon="bar-chart")
+            _todo_list = _DATA.get("todos", [])
+            if _todo_list:
+                c.nav_item("TODOs", key="todos_panel", icon="alert-circle",
+                            badge=str(len(_todo_list)))
+            _changes_list = _DATA.get("changes", [])
+            if _changes_list:
+                c.nav_item("Changelog", key="changelog_panel", icon="clock",
+                            badge=str(len(_changes_list)))
+            _dead_list = _DATA.get("dead_code", [])
+            if _dead_list:
+                c.nav_item("Dead Code", key="dead_code_panel", icon="trash",
+                            badge=str(len(_dead_list)))
 
         if _PAGES:
             with c.nav_group("Pages", icon="book"):
@@ -1922,6 +2174,181 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
                                         c.text(f'... and {{len(entry["external"]) - 15}} more', size="sm", color="muted")
             else:
                 c.text("No call relationships found.", color="muted")
+
+        # --- Dashboard Panel ---
+        with c.nav_panel("dashboard"):
+            c.title("Dashboard", level=2)
+            c.text("Project health and code insights.", color="muted")
+            c.spacer(4)
+
+            # Coverage
+            _cov = _DATA.get("coverage", {{}})
+            _score = _cov.get("project_score", 0)
+            _score_color = "success" if _score >= 80 else ("warning" if _score >= 50 else "danger")
+            with c.row(wrap=True, gap=4):
+                c.metric("Doc Coverage", f"{{_score}}%")
+                c.metric("Fully Documented", _cov.get("fully_documented", 0))
+                c.metric("Undocumented", _cov.get("undocumented", 0))
+                c.metric("Total Items", _cov.get("total_items", 0))
+
+            c.spacer(4)
+            c.title("TODOs & Debt", level=3)
+            c.spacer(2)
+            _all_todos = _DATA.get("todos", [])
+            _all_dead = _DATA.get("dead_code", [])
+            _all_deprecated = [f for f in _FUNCTIONS + _API_ENDPOINTS if f.get("is_deprecated")]
+            with c.row(wrap=True, gap=4):
+                c.metric("TODOs", len([t for t in _all_todos if t.get("tag") == "TODO"]))
+                c.metric("FIXMEs", len([t for t in _all_todos if t.get("tag") == "FIXME"]))
+                c.metric("Deprecated", len(_all_deprecated))
+                c.metric("Dead Code", len(_all_dead))
+
+            # Complexity hotspots
+            c.spacer(4)
+            c.title("Complexity Hotspots", level=3)
+            c.spacer(2)
+            _all_items = _FUNCTIONS + _API_ENDPOINTS
+            for cls in _CLASSES:
+                for m in cls.get("methods", []):
+                    _all_items.append({{**m, "full_path": f'{{cls["full_path"]}}.{{m["name"]}}'}})
+            _complex = sorted([f for f in _all_items if f.get("complexity", 1) >= 6],
+                              key=lambda x: x.get("complexity", 1), reverse=True)[:15]
+            if _complex:
+                _cx_table = []
+                for f in _complex:
+                    cx = f.get("complexity", 1)
+                    _cx_table.append({{
+                        "Function": f.get("full_path", f["name"]),
+                        "Complexity": cx,
+                        "Level": "High" if cx >= 15 else ("Medium" if cx >= 8 else "Low"),
+                    }})
+                c.table(_cx_table, paginate=False)
+            else:
+                c.text("No high-complexity functions found.", color="muted")
+
+            # Coverage per item
+            c.spacer(4)
+            c.title("Coverage Details", level=3)
+            c.spacer(2)
+            _cov_items = _cov.get("items", [])
+            if _cov_items:
+                _low_cov = sorted([i for i in _cov_items if i["score"] < 100],
+                                  key=lambda x: x["score"])[:20]
+                if _low_cov:
+                    _cov_table = []
+                    for i in _low_cov:
+                        checks = i.get("checks", {{}})
+                        missing = checks.get("args_missing", [])
+                        _cov_table.append({{
+                            "Name": i["name"],
+                            "Type": i["doc_type"],
+                            "Score": f'{{i["score"]}}%',
+                            "Missing Args": ", ".join(missing) if missing else "",
+                        }})
+                    c.table(_cov_table, paginate=False)
+                else:
+                    c.text("All items are fully documented!", color="success")
+
+        # --- TODOs Panel ---
+        _todo_list_panel = _DATA.get("todos", [])
+        if _todo_list_panel:
+            with c.nav_panel("todos_panel"):
+                c.title("TODOs", level=2)
+                c.text("TODO, FIXME, HACK, and XXX comments found in source code.", color="muted")
+                c.spacer(4)
+
+                _tag_counts = {{}}
+                for t in _todo_list_panel:
+                    _tag_counts[t["tag"]] = _tag_counts.get(t["tag"], 0) + 1
+                with c.row(wrap=True, gap=4):
+                    for tag, cnt in sorted(_tag_counts.items()):
+                        _tc = "danger" if tag == "FIXME" else ("warning" if tag in ("HACK", "XXX") else "info")
+                        c.metric(tag, cnt)
+
+                c.spacer(3)
+                _todo_table = []
+                for t in _todo_list_panel:
+                    _todo_table.append({{
+                        "Tag": t["tag"],
+                        "Message": t["text"],
+                        "Module": t.get("module", ""),
+                        "Line": t.get("line_number", ""),
+                    }})
+                c.table(_todo_table, searchable=True, page_size=25)
+
+        # --- Changelog Panel ---
+        _changes_panel = _DATA.get("changes", [])
+        if _changes_panel:
+            with c.nav_panel("changelog_panel"):
+                c.title("Recent Changes", level=2)
+                c.text("Functions and endpoints that changed since the last build.", color="muted")
+                c.spacer(4)
+
+                _ch_counts = {{}}
+                for ch in _changes_panel:
+                    _ch_counts[ch["change"]] = _ch_counts.get(ch["change"], 0) + 1
+                with c.row(wrap=True, gap=4):
+                    for chtype, cnt in sorted(_ch_counts.items()):
+                        c.metric(chtype.replace("+", " + ").title(), cnt)
+
+                c.spacer(3)
+                _breaking = _DATA.get("breaking_changes", [])
+                if _breaking:
+                    c.title("Breaking Changes", level=3)
+                    c.spacer(2)
+                    for b in _breaking:
+                        with c.card(b["full_path"]):
+                            for d in b.get("details", []):
+                                _icon = "!!" if d.get("breaking") else ""
+                                if d["type"] == "arg_removed":
+                                    c.text(f'{{_icon}} Argument removed: {{d["arg"]}}', color="danger")
+                                elif d["type"] == "required_arg_added":
+                                    c.text(f'{{_icon}} Required argument added: {{d["arg"]}}', color="danger")
+                                elif d["type"] == "type_changed":
+                                    c.text(f'{{_icon}} Type changed: {{d["arg"]}} ({{d["from"]}} -> {{d["to"]}})', color="warning")
+                                elif d["type"] == "return_type_changed":
+                                    c.text(f'{{_icon}} Return type changed: {{d["from"]}} -> {{d["to"]}}', color="warning")
+                                elif d["type"] == "optional_arg_added":
+                                    c.text(f'Optional argument added: {{d["arg"]}}', color="success")
+                    c.spacer(3)
+
+                c.title("All Changes", level=3)
+                c.spacer(2)
+                _ch_table = []
+                for ch in _changes_panel:
+                    _ch_color = {{"new": "success", "removed": "danger", "signature": "warning",
+                                 "body": "info", "signature+body": "danger"}}
+                    _ch_table.append({{
+                        "Name": ch["name"],
+                        "Type": ch["doc_type"],
+                        "Change": ch["change"],
+                        "Path": ch["full_path"],
+                    }})
+                c.table(_ch_table, searchable=True, page_size=25)
+
+        # --- Dead Code Panel ---
+        _dead_panel = _DATA.get("dead_code", [])
+        if _dead_panel:
+            with c.nav_panel("dead_code_panel"):
+                c.title("Dead Code", level=2)
+                c.text("Public functions and methods with no internal callers.", color="muted")
+                c.spacer(4)
+
+                c.metric("Potentially Unused", len(_dead_panel))
+                c.spacer(3)
+
+                _dc_table = []
+                for d in _dead_panel:
+                    _dc_table.append({{
+                        "Function": d["full_path"],
+                        "Type": d["doc_type"],
+                        "Module": d.get("module", ""),
+                    }})
+                c.table(_dc_table, searchable=True, page_size=25)
+
+                c.spacer(2)
+                c.text("Note: Entry points, decorated functions, and private methods are excluded. "
+                       "These may still be used externally.", size="sm", color="muted")
 
         # --- Page Panels ---
         for page in _PAGES:

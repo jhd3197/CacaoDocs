@@ -182,6 +182,12 @@ class MethodDoc:
     signature_hash: str = ""
     body_hash: str = ""
     complexity: int = 1
+    is_deprecated: bool = False
+    deprecation_message: str = ""
+    deprecation_since: str = ""
+    category: str = ""
+    version: str = ""
+    hidden: bool = False
 
 
 @dataclass
@@ -202,6 +208,12 @@ class FunctionDoc:
     signature_hash: str = ""
     body_hash: str = ""
     complexity: int = 1
+    is_deprecated: bool = False
+    deprecation_message: str = ""
+    deprecation_since: str = ""
+    category: str = ""
+    version: str = ""
+    hidden: bool = False
 
 
 @dataclass

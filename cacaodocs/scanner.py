@@ -6,7 +6,7 @@ import hashlib
 import os
 import re
 from pathlib import Path
-from typing import Generator
+from typing import Any, Generator
 
 from .parser import DocstringParser
 from .types import (
@@ -149,6 +149,110 @@ def _extract_todos(source: str, file_path: str, module_path: str) -> list[TodoDo
                 module=module_path,
             ))
     return todos
+
+
+def _extract_doc_decorator(node: ast.FunctionDef | ast.AsyncFunctionDef) -> dict[str, Any]:
+    """Extract metadata from @doc(...) or @cacaodocs.doc(...) decorator.
+
+    Returns a dict of keyword args found on the decorator (empty if not present).
+    """
+    for d in node.decorator_list:
+        if not isinstance(d, ast.Call):
+            continue
+        # Match @doc(...) or @cacaodocs.doc(...)
+        func = d.func
+        is_doc = False
+        if isinstance(func, ast.Name) and func.id == "doc":
+            is_doc = True
+        elif isinstance(func, ast.Attribute) and func.attr == "doc":
+            # cacaodocs.doc(...)
+            if isinstance(func.value, ast.Name) and func.value.id == "cacaodocs":
+                is_doc = True
+
+        if not is_doc:
+            continue
+
+        result: dict[str, Any] = {}
+        for kw in d.keywords:
+            if kw.arg is None:
+                continue
+            if isinstance(kw.value, ast.Constant):
+                result[kw.arg] = kw.value.value
+            elif isinstance(kw.value, ast.Name):
+                # Handle bare True/False/None (ast.Constant in 3.8+, but just in case)
+                name = kw.value.id
+                if name == "True":
+                    result[kw.arg] = True
+                elif name == "False":
+                    result[kw.arg] = False
+                elif name == "None":
+                    result[kw.arg] = None
+        return result
+    return {}
+
+
+def _detect_deprecation(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+    docstring: str,
+) -> tuple[bool, str, str]:
+    """Detect deprecation from decorators or docstring.
+
+    Checks for @deprecated, @deprecate, warnings.warn(DeprecationWarning),
+    and 'Deprecated:' in the docstring.
+
+    Returns (is_deprecated, message, since).
+    """
+    # Check decorators
+    for d in node.decorator_list:
+        name = ""
+        if isinstance(d, ast.Name):
+            name = d.id
+        elif isinstance(d, ast.Attribute):
+            name = d.attr
+        elif isinstance(d, ast.Call):
+            if isinstance(d.func, ast.Name):
+                name = d.func.id
+            elif isinstance(d.func, ast.Attribute):
+                name = d.func.attr
+
+        if name.lower() in ("deprecated", "deprecate"):
+            msg = ""
+            since = ""
+            if isinstance(d, ast.Call):
+                # Extract message from positional args
+                if d.args:
+                    first = d.args[0]
+                    if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                        msg = first.value
+                # Extract since= keyword arg
+                for kw in d.keywords:
+                    if kw.arg == "since" and isinstance(kw.value, ast.Constant):
+                        since = str(kw.value.value)
+            return True, msg, since
+
+    # Check docstring for deprecation lines
+    if docstring:
+        import re
+        for line in docstring.splitlines():
+            stripped = line.strip()
+            # ".. deprecated:: 2.0" (Sphinx style)
+            sphinx = re.match(r'\.\.\s+deprecated::\s*(.+)', stripped, re.IGNORECASE)
+            if sphinx:
+                return True, "", sphinx.group(1).strip()
+            # "Deprecated since 2.0: message" or "Deprecated since 2.0"
+            since_match = re.match(r'deprecated\s+since\s+([^:]+?)(?::\s*(.*))?$', stripped, re.IGNORECASE)
+            if since_match:
+                since = since_match.group(1).strip()
+                msg = (since_match.group(2) or "").strip()
+                return True, msg, since
+            # "Deprecated: message"
+            if stripped.lower().startswith("deprecated:"):
+                msg = stripped[len("deprecated:"):].strip()
+                return True, msg, ""
+            if stripped.lower() == "deprecated" or stripped.lower() == "deprecated.":
+                return True, "", ""
+
+    return False, "", ""
 
 
 def _hash_class_body(node: ast.ClassDef) -> str:
@@ -437,8 +541,16 @@ class Scanner:
         docstring = ast.get_docstring(node) or ""
         decorators = [self._get_decorator_name(d) for d in node.decorator_list]
 
-        # Auto-detect doc type from decorators
+        # Extract @doc(...) decorator metadata
+        doc_meta = _extract_doc_decorator(node)
+
+        # Auto-detect doc type from decorators (decorator override wins)
         detected_type, http_method, route_path = self._detect_doc_type(node)
+        if doc_meta.get("doc_type"):
+            try:
+                detected_type = DocType(doc_meta["doc_type"])
+            except ValueError:
+                pass
         parsed = self.parser.parse(docstring, hint_type=detected_type)
 
         # Fill in method/path from decorator if not in docstring
@@ -451,6 +563,15 @@ class Scanner:
         signature = self._build_signature(node)
         func_source = ast.get_source_segment(source, node) or ""
         calls = self._extract_calls(node)
+        is_deprecated, dep_msg, dep_since = _detect_deprecation(node, docstring)
+
+        # @doc(deprecated=...) overrides docstring/decorator detection
+        if "deprecated" in doc_meta:
+            dep_val = doc_meta["deprecated"]
+            if isinstance(dep_val, str) and dep_val:
+                is_deprecated, dep_since = True, dep_val
+            else:
+                is_deprecated = bool(dep_val)
 
         return FunctionDoc(
             name=node.name,
@@ -467,6 +588,12 @@ class Scanner:
             signature_hash=_hash_signature(node),
             body_hash=_hash_body(node),
             complexity=_cyclomatic_complexity(node),
+            is_deprecated=is_deprecated,
+            deprecation_message=dep_msg,
+            deprecation_since=dep_since,
+            category=str(doc_meta.get("category", "")),
+            version=str(doc_meta.get("version", "")),
+            hidden=bool(doc_meta.get("hidden", False)),
         )
 
     def _extract_method(
@@ -476,8 +603,16 @@ class Scanner:
         docstring = ast.get_docstring(node) or ""
         decorators = [self._get_decorator_name(d) for d in node.decorator_list]
 
-        # Auto-detect doc type
+        # Extract @doc(...) decorator metadata
+        doc_meta = _extract_doc_decorator(node)
+
+        # Auto-detect doc type (decorator override wins)
         detected_type, http_method, route_path = self._detect_doc_type(node)
+        if doc_meta.get("doc_type"):
+            try:
+                detected_type = DocType(doc_meta["doc_type"])
+            except ValueError:
+                pass
         parsed = self.parser.parse(docstring, hint_type=detected_type)
 
         if detected_type == DocType.API:
@@ -495,6 +630,15 @@ class Scanner:
         signature = self._build_signature(node)
         method_source = ast.get_source_segment(source, node) or ""
         calls = self._extract_calls(node)
+        is_deprecated, dep_msg, dep_since = _detect_deprecation(node, docstring)
+
+        # @doc(deprecated=...) overrides docstring/decorator detection
+        if "deprecated" in doc_meta:
+            dep_val = doc_meta["deprecated"]
+            if isinstance(dep_val, str) and dep_val:
+                is_deprecated, dep_since = True, dep_val
+            else:
+                is_deprecated = bool(dep_val)
 
         return MethodDoc(
             name=node.name,
@@ -513,6 +657,12 @@ class Scanner:
             signature_hash=_hash_signature(node),
             body_hash=_hash_body(node),
             complexity=_cyclomatic_complexity(node),
+            is_deprecated=is_deprecated,
+            deprecation_message=dep_msg,
+            deprecation_since=dep_since,
+            category=str(doc_meta.get("category", "")),
+            version=str(doc_meta.get("version", "")),
+            hidden=bool(doc_meta.get("hidden", False)),
         )
 
     def _extract_calls(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
