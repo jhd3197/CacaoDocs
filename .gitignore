@@ -175,3 +175,4 @@ node_modules/
 /_build/
 /dist/
 *.zip
+/.pr
