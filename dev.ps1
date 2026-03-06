@@ -1,0 +1,254 @@
+# CacaoDocs dev launcher.
+#
+# Usage:
+#   .\dev.ps1                  # build + serve docs (default)
+#   .\dev.ps1 run              # build + serve docs
+#   .\dev.ps1 validate         # watch Python files and validate on changes
+#   .\dev.ps1 build            # build docs only
+
+param(
+    [ValidateSet("run", "validate", "build")]
+    [string]$Mode = "run"
+)
+
+$ErrorActionPreference = "Stop"
+$Root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$procs = @()
+
+# --- Helper: kill a process and its entire child tree ---
+function Stop-ProcessTree([int]$ParentId) {
+    Get-CimInstance Win32_Process -Filter "ParentProcessId=$ParentId" -ErrorAction SilentlyContinue |
+        ForEach-Object { Stop-ProcessTree $_.ProcessId }
+    Stop-Process -Id $ParentId -Force -ErrorAction SilentlyContinue
+}
+
+# --- build mode ---
+if ($Mode -eq "build") {
+    Write-Host "[dev] Building docs..." -ForegroundColor Cyan
+    & cacaodocs build "$Root\docs" -o "$Root\_build"
+    Write-Host "[dev] Done." -ForegroundColor Green
+    return
+}
+
+# --- validate mode ---
+if ($Mode -eq "validate") {
+    $pyPath = "$Root\cacaodocs"
+    Write-Host "[dev] Watching for lint + type + test errors" -ForegroundColor Cyan
+    Write-Host "[dev]   Python: $pyPath" -ForegroundColor DarkGray
+    Write-Host "[dev] Press Ctrl+C to stop." -ForegroundColor DarkGray
+    Write-Host ""
+
+    function Invoke-AllLint {
+        $ts = Get-Date -Format "HH:mm:ss"
+        Write-Host "[$ts] " -ForegroundColor DarkGray -NoNewline
+        Write-Host "Running linters..." -ForegroundColor Cyan
+        Write-Host ""
+
+        $script:failures = 0
+
+        # --- Python: ruff check (auto-fix) ---
+        Write-Host "  ruff check      " -ForegroundColor Cyan -NoNewline
+        $out = & ruff check $pyPath 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "ok" -ForegroundColor Green
+        } else {
+            $fixOut = & ruff check --fix --unsafe-fixes $pyPath 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $fixed = ($out | Select-String "^\[").Count
+                Write-Host "fixed $fixed issues" -ForegroundColor Yellow
+            } else {
+                $script:failures++
+                Write-Host "fail" -ForegroundColor Red
+                $fixOut | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+            }
+        }
+
+        # --- Python: ruff format (auto-fix) ---
+        Write-Host "  ruff format     " -ForegroundColor Cyan -NoNewline
+        $out = & ruff format --check $pyPath 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "ok" -ForegroundColor Green
+        } else {
+            & ruff format $pyPath 2>&1 | Out-Null
+            & ruff format --check $pyPath 2>&1 | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+                $fixed = ($out | Select-String "^Would reformat:").Count
+                Write-Host "fixed $fixed files" -ForegroundColor Yellow
+            } else {
+                $script:failures++
+                Write-Host "fail (could not auto-format)" -ForegroundColor Red
+                $out | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+            }
+        }
+
+        # --- Verify: ruff clean after fixes ---
+        Write-Host "  ruff verify     " -ForegroundColor Cyan -NoNewline
+        $out = & ruff check $pyPath 2>&1
+        $checkOk = $LASTEXITCODE -eq 0
+        $out2 = & ruff format --check $pyPath 2>&1
+        $fmtOk = $LASTEXITCODE -eq 0
+        if ($checkOk -and $fmtOk) {
+            Write-Host "ok" -ForegroundColor Green
+        } else {
+            $script:failures++
+            Write-Host "fail (issues remain after auto-fix)" -ForegroundColor Red
+            if (-not $checkOk) { $out  | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
+            if (-not $fmtOk)   { $out2 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray } }
+        }
+
+        # --- Python: mypy type check ---
+        Write-Host "  mypy            " -ForegroundColor Cyan -NoNewline
+        $savedEAP = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+        $out = & mypy $pyPath 2>&1
+        $myExit = $LASTEXITCODE
+        $ErrorActionPreference = $savedEAP
+        if ($myExit -eq 0) {
+            Write-Host "ok" -ForegroundColor Green
+        } else {
+            $script:failures++
+            $errCount = ($out | Select-String "^Found \d+ error").Count
+            if ($errCount -gt 0) {
+                $summary = ($out | Select-String "^Found \d+ error").Line
+                Write-Host "fail ($summary)" -ForegroundColor Red
+            } else {
+                Write-Host "fail" -ForegroundColor Red
+            }
+            $out | Where-Object { $_ -match "error:" } | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+        }
+
+        # --- Python: pytest ---
+        Write-Host "  pytest          " -ForegroundColor Cyan -NoNewline
+        $savedEAP = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+        $out = & pytest --tb=short -q 2>&1
+        $ErrorActionPreference = $savedEAP
+        if ($LASTEXITCODE -eq 0) {
+            $passLine = ($out | Select-String "passed").Line
+            if ($passLine) {
+                Write-Host "ok ($passLine)" -ForegroundColor Green
+            } else {
+                Write-Host "ok" -ForegroundColor Green
+            }
+        } elseif ($LASTEXITCODE -eq 5) {
+            Write-Host "skipped (no tests)" -ForegroundColor Yellow
+        } else {
+            $script:failures++
+            $failLine = ($out | Select-String "failed|error").Line | Select-Object -First 1
+            if ($failLine) {
+                Write-Host "fail ($failLine)" -ForegroundColor Red
+            } else {
+                Write-Host "fail" -ForegroundColor Red
+            }
+            $out | Where-Object { $_ -match "FAILED|ERROR" } | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+        }
+
+        # --- Summary ---
+        Write-Host ""
+        if ($script:failures -eq 0) {
+            Write-Host "  All checks passed!" -ForegroundColor Green
+        } else {
+            Write-Host "  $($script:failures) check(s) failed" -ForegroundColor Red
+        }
+        Write-Host ""
+    }
+
+    Invoke-AllLint
+
+    # Watch Python files
+    $pyWatcher = [System.IO.FileSystemWatcher]::new($pyPath, "*.py")
+    $pyWatcher.IncludeSubdirectories = $true
+    $pyWatcher.NotifyFilter = [System.IO.NotifyFilters]::LastWrite -bor
+                              [System.IO.NotifyFilters]::FileName -bor
+                              [System.IO.NotifyFilters]::CreationTime
+    $pyWatcher.EnableRaisingEvents = $true
+
+    $lastRun = [datetime]::MinValue
+
+    $handler = {
+        $now = Get-Date
+        $script:lastChange = $now
+    }
+
+    $script:lastChange = [datetime]::MinValue
+
+    Register-ObjectEvent $pyWatcher Changed -Action $handler | Out-Null
+    Register-ObjectEvent $pyWatcher Created -Action $handler | Out-Null
+    Register-ObjectEvent $pyWatcher Renamed -Action $handler | Out-Null
+
+    try {
+        while ($true) {
+            Start-Sleep -Milliseconds 500
+            if ($script:lastChange -ne [datetime]::MinValue -and
+                ((Get-Date) - $script:lastChange).TotalMilliseconds -gt 800 -and
+                $script:lastChange -ne $lastRun) {
+                $lastRun = $script:lastChange
+                Invoke-AllLint
+            }
+        }
+    } finally {
+        $pyWatcher.Dispose()
+        Get-EventSubscriber | Unregister-Event
+        Write-Host "[dev] Watcher stopped." -ForegroundColor Green
+    }
+    return
+}
+
+# --- run mode ---
+
+# Kill stale processes on default port
+$port = 1502
+$stalePids = @()
+$lines = netstat -ano | Select-String ":$port\s"
+foreach ($line in $lines) {
+    if ($line -match '\s(\d+)\s*$') {
+        $pid = [int]$Matches[1]
+        if ($pid -ne 0 -and $stalePids -notcontains $pid) { $stalePids += $pid }
+    }
+}
+foreach ($stalePid in $stalePids) {
+    Write-Host "[dev] Killing stale process on port $port (PID $stalePid)" -ForegroundColor Yellow
+    Stop-ProcessTree $stalePid
+}
+
+# Clear __pycache__
+Write-Host "[dev] Clearing __pycache__..." -ForegroundColor DarkGray
+Get-ChildItem -Path "$Root\cacaodocs" -Recurse -Directory -Filter __pycache__ |
+    Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+
+# Ensure editable install
+Write-Host "[dev] Syncing editable install..." -ForegroundColor DarkGray
+$savedEAP = $ErrorActionPreference; $ErrorActionPreference = "Continue"
+Push-Location $Root
+$out = & pip install -e ".[dev]" -q 2>&1
+if ($LASTEXITCODE -ne 0) { Write-Host "[dev]   install FAILED: $out" -ForegroundColor Red }
+else { Write-Host "[dev]   cacaodocs -> $Root (editable)" -ForegroundColor DarkGray }
+Pop-Location
+$ErrorActionPreference = $savedEAP
+
+# Build docs
+Write-Host "[dev] Building docs..." -ForegroundColor Cyan
+& cacaodocs build "$Root\docs" -o "$Root\_build"
+
+# Serve docs
+Write-Host "[dev] cacaodocs serve -> " -ForegroundColor Cyan -NoNewline
+Write-Host "http://127.0.0.1:$port" -ForegroundColor Green
+$procs += Start-Process -NoNewWindow -PassThru -FilePath "cacaodocs" `
+    -ArgumentList "serve", "$Root\_build"
+
+Write-Host "[dev] Running. Press Ctrl+C to stop." -ForegroundColor DarkGray
+Write-Host ""
+
+try {
+    while ($true) {
+        foreach ($p in $procs) {
+            if ($p.HasExited) { throw "exit" }
+        }
+        Start-Sleep -Milliseconds 500
+    }
+} catch {} finally {
+    Write-Host ""
+    Write-Host "[dev] Shutting down..." -ForegroundColor Cyan
+    foreach ($p in $procs) {
+        if (-not $p.HasExited) { Stop-ProcessTree $p.Id }
+    }
+    Write-Host "[dev] Done." -ForegroundColor Green
+}

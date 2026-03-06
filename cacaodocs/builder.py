@@ -1,4 +1,5 @@
 """Build documentation as a Cacao app."""
+
 import json
 from pathlib import Path
 from typing import Any
@@ -21,21 +22,35 @@ def _serialize_docstring(docstring: ParsedDocstring) -> dict[str, Any]:
         "doc_type": docstring.doc_type.value,
         # Function sections
         "args": [
-            {"name": a.name, "type": a.type, "description": a.description,
-             "default": a.default, "required": a.required}
+            {
+                "name": a.name,
+                "type": a.type,
+                "description": a.description,
+                "default": a.default,
+                "required": a.required,
+            }
             for a in docstring.args
         ],
         "returns": (
-            {"type": docstring.returns.type, "description": docstring.returns.description}
-            if docstring.returns else None
+            {
+                "type": docstring.returns.type,
+                "description": docstring.returns.description,
+            }
+            if docstring.returns
+            else None
         ),
         "raises": [
             {"type": r.type, "description": r.description} for r in docstring.raises
         ],
         "examples": docstring.examples,
         "attributes": [
-            {"name": a.name, "type": a.type, "description": a.description,
-             "default": a.default, "required": a.required}
+            {
+                "name": a.name,
+                "type": a.type,
+                "description": a.description,
+                "default": a.default,
+                "required": a.required,
+            }
             for a in docstring.attributes
         ],
         "notes": docstring.notes,
@@ -46,18 +61,33 @@ def _serialize_docstring(docstring: ParsedDocstring) -> dict[str, Any]:
         result["http_method"] = docstring.http_method
         result["path"] = docstring.path
         result["path_params"] = [
-            {"name": a.name, "type": a.type, "description": a.description,
-             "default": a.default, "required": a.required}
+            {
+                "name": a.name,
+                "type": a.type,
+                "description": a.description,
+                "default": a.default,
+                "required": a.required,
+            }
             for a in docstring.path_params
         ]
         result["query_params"] = [
-            {"name": a.name, "type": a.type, "description": a.description,
-             "default": a.default, "required": a.required}
+            {
+                "name": a.name,
+                "type": a.type,
+                "description": a.description,
+                "default": a.default,
+                "required": a.required,
+            }
             for a in docstring.query_params
         ]
         result["request_body"] = [
-            {"name": a.name, "type": a.type, "description": a.description,
-             "default": a.default, "required": a.required}
+            {
+                "name": a.name,
+                "type": a.type,
+                "description": a.description,
+                "default": a.default,
+                "required": a.required,
+            }
             for a in docstring.request_body
         ]
         result["responses"] = [
@@ -72,8 +102,12 @@ def _serialize_docstring(docstring: ParsedDocstring) -> dict[str, Any]:
             for r in docstring.responses
         ]
         result["headers"] = [
-            {"name": h.name, "description": h.description,
-             "required": h.required, "example": h.example}
+            {
+                "name": h.name,
+                "description": h.description,
+                "required": h.required,
+                "example": h.example,
+            }
             for h in docstring.headers
         ]
 
@@ -88,8 +122,14 @@ def _serialize_docstring(docstring: ParsedDocstring) -> dict[str, Any]:
     # Config sections
     if docstring.doc_type == DocType.CONFIG or docstring.config_fields:
         result["config_fields"] = [
-            {"name": f.name, "type": f.type, "description": f.description,
-             "default": f.default, "required": f.required, "env_var": f.env_var}
+            {
+                "name": f.name,
+                "type": f.type,
+                "description": f.description,
+                "default": f.default,
+                "required": f.required,
+                "env_var": f.env_var,
+            }
             for f in docstring.config_fields
         ]
 
@@ -115,6 +155,15 @@ def _serialize_method(method: MethodDoc) -> dict[str, Any]:
         "decorators": method.decorators,
         "calls": method.calls,
         "doc_type": method.doc_type.value,
+        "signature_hash": method.signature_hash,
+        "body_hash": method.body_hash,
+        "complexity": method.complexity,
+        "is_deprecated": method.is_deprecated,
+        "deprecation_message": method.deprecation_message,
+        "deprecation_since": method.deprecation_since,
+        "category": method.category,
+        "version": method.version,
+        "hidden": method.hidden,
     }
 
 
@@ -131,6 +180,15 @@ def _serialize_function(func: FunctionDoc) -> dict[str, Any]:
         "decorators": func.decorators,
         "calls": func.calls,
         "doc_type": func.doc_type.value,
+        "signature_hash": func.signature_hash,
+        "body_hash": func.body_hash,
+        "complexity": func.complexity,
+        "is_deprecated": func.is_deprecated,
+        "deprecation_message": func.deprecation_message,
+        "deprecation_since": func.deprecation_since,
+        "category": func.category,
+        "version": func.version,
+        "hidden": func.hidden,
     }
 
 
@@ -146,6 +204,8 @@ def _serialize_class(cls: ClassDoc) -> dict[str, Any]:
         "line_number": cls.line_number,
         "decorators": cls.decorators,
         "doc_type": cls.doc_type.value,
+        "signature_hash": cls.signature_hash,
+        "body_hash": cls.body_hash,
     }
 
 
@@ -157,6 +217,16 @@ def _serialize_module(module: ModuleDoc) -> dict[str, Any]:
         "docstring": module.docstring,
         "classes": [_serialize_class(c) for c in module.classes],
         "functions": [_serialize_function(f) for f in module.functions],
+        "todos": [
+            {
+                "tag": t.tag,
+                "text": t.text,
+                "file_path": t.file_path,
+                "line_number": t.line_number,
+                "module": t.module,
+            }
+            for t in module.todos
+        ],
     }
 
 
@@ -168,6 +238,538 @@ def _serialize_page(page: PageDoc) -> dict[str, Any]:
         "file_path": page.file_path,
         "order": page.order,
     }
+
+
+def _compute_changes(
+    old_data: dict[str, Any], new_data: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Compare old and new build data to detect function/endpoint changes.
+
+    Returns a list of change records with keys:
+        - full_path: The function/class identifier
+        - name: Display name
+        - doc_type: function, api, class, etc.
+        - change: "new", "removed", "signature", "body", "signature+body"
+    """
+    changes: list[dict[str, Any]] = []
+
+    def _index_items(data: dict[str, Any]) -> dict[str, dict[str, str]]:
+        """Build a lookup: full_path -> {signature_hash, body_hash, name, doc_type}."""
+        index: dict[str, dict[str, str]] = {}
+        for item in data.get("functions", []):
+            index[item["full_path"]] = {
+                "signature_hash": item.get("signature_hash", ""),
+                "body_hash": item.get("body_hash", ""),
+                "name": item["name"],
+                "doc_type": item.get("doc_type", "function"),
+            }
+        for item in data.get("api_endpoints", []):
+            index[item["full_path"]] = {
+                "signature_hash": item.get("signature_hash", ""),
+                "body_hash": item.get("body_hash", ""),
+                "name": item["name"],
+                "doc_type": item.get("doc_type", "api"),
+            }
+        for item in data.get("classes", []):
+            index[item["full_path"]] = {
+                "signature_hash": item.get("signature_hash", ""),
+                "body_hash": item.get("body_hash", ""),
+                "name": item["name"],
+                "doc_type": item.get("doc_type", "class"),
+            }
+            for method in item.get("methods", []):
+                method_path = f"{item['full_path']}.{method['name']}"
+                index[method_path] = {
+                    "signature_hash": method.get("signature_hash", ""),
+                    "body_hash": method.get("body_hash", ""),
+                    "name": method["name"],
+                    "doc_type": method.get("doc_type", "function"),
+                }
+        return index
+
+    old_index = _index_items(old_data)
+    new_index = _index_items(new_data)
+
+    all_paths = set(old_index) | set(new_index)
+
+    for path in sorted(all_paths):
+        old = old_index.get(path)
+        new = new_index.get(path)
+
+        if new and not old:
+            changes.append(
+                {
+                    "full_path": path,
+                    "name": new["name"],
+                    "doc_type": new["doc_type"],
+                    "change": "new",
+                }
+            )
+        elif old and not new:
+            changes.append(
+                {
+                    "full_path": path,
+                    "name": old["name"],
+                    "doc_type": old["doc_type"],
+                    "change": "removed",
+                }
+            )
+        elif old and new:
+            sig_changed = old["signature_hash"] != new["signature_hash"]
+            body_changed = old["body_hash"] != new["body_hash"]
+            if sig_changed and body_changed:
+                change_type = "signature+body"
+            elif sig_changed:
+                change_type = "signature"
+            elif body_changed:
+                change_type = "body"
+            else:
+                continue
+            changes.append(
+                {
+                    "full_path": path,
+                    "name": new["name"],
+                    "doc_type": new["doc_type"],
+                    "change": change_type,
+                }
+            )
+
+    return changes
+
+
+def _detect_breaking_changes(
+    old_data: dict[str, Any], new_data: dict[str, Any]
+) -> list[dict[str, Any]]:
+    """Detect breaking vs non-breaking signature changes between builds.
+
+    Compares function arguments to classify changes as:
+        - arg_removed: An argument was removed
+        - arg_renamed: An argument name changed
+        - type_changed: An argument's type annotation changed
+        - required_arg_added: A new argument without a default was added
+        - optional_arg_added: A new argument with a default was added (non-breaking)
+        - return_type_changed: Return type annotation changed
+    """
+    breaking: list[dict[str, Any]] = []
+
+    def _index_with_args(data: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        index: dict[str, dict[str, Any]] = {}
+        for lst in ("functions", "api_endpoints"):
+            for item in data.get(lst, []):
+                sig = item.get("signature", "")
+                sig_params = _parse_signature_params(sig)
+                # Extract return type from signature
+                ret_type = ""
+                arrow_pos = sig.rfind("->")
+                if arrow_pos != -1:
+                    ret_type = sig[arrow_pos + 2 :].strip()
+                index[item["full_path"]] = {
+                    "name": item["name"],
+                    "doc_type": item.get("doc_type", "function"),
+                    "params": {p["name"]: p for p in sig_params},
+                    "return_type": ret_type,
+                    "signature_hash": item.get("signature_hash", ""),
+                }
+        return index
+
+    old_idx = _index_with_args(old_data)
+    new_idx = _index_with_args(new_data)
+
+    for path in set(old_idx) & set(new_idx):
+        old = old_idx[path]
+        new = new_idx[path]
+
+        if old["signature_hash"] == new["signature_hash"]:
+            continue
+
+        details: list[dict[str, Any]] = []
+
+        old_params = old["params"]
+        new_params = new["params"]
+
+        # Removed params
+        for name in old_params:
+            if name not in new_params:
+                details.append({"type": "arg_removed", "arg": name, "breaking": True})
+
+        # New params
+        for name in new_params:
+            if name not in old_params:
+                has_default = new_params[name].get("default") is not None
+                if has_default:
+                    details.append(
+                        {"type": "optional_arg_added", "arg": name, "breaking": False}
+                    )
+                else:
+                    details.append(
+                        {"type": "required_arg_added", "arg": name, "breaking": True}
+                    )
+
+        # Type changes on existing params
+        for name in old_params:
+            if name in new_params:
+                old_type = old_params[name].get("type", "")
+                new_type = new_params[name].get("type", "")
+                if old_type and new_type and old_type != new_type:
+                    details.append(
+                        {
+                            "type": "type_changed",
+                            "arg": name,
+                            "from": old_type,
+                            "to": new_type,
+                            "breaking": True,
+                        }
+                    )
+
+        # Return type change
+        old_ret = old.get("return_type", "")
+        new_ret = new.get("return_type", "")
+        if old_ret and new_ret and old_ret != new_ret:
+            details.append(
+                {
+                    "type": "return_type_changed",
+                    "from": old_ret,
+                    "to": new_ret,
+                    "breaking": True,
+                }
+            )
+
+        if details:
+            is_breaking = any(d.get("breaking") for d in details)
+            breaking.append(
+                {
+                    "full_path": path,
+                    "name": new["name"],
+                    "doc_type": new["doc_type"],
+                    "is_breaking": is_breaking,
+                    "details": details,
+                }
+            )
+
+    return breaking
+
+
+def _parse_signature_params(signature: str) -> list[dict[str, str]]:
+    """Extract parameter names, types, and defaults from a signature string.
+
+    Parses "(self, x: int, y: str = 'hi', *args, **kwargs) -> bool"
+    into a list of param dicts, excluding 'self' and 'cls'.
+    """
+    params: list[dict[str, str]] = []
+    if not signature:
+        return params
+
+    # Strip outer parens and return annotation
+    inner = signature.strip()
+    if inner.startswith("("):
+        # Find matching closing paren (handles nested generics)
+        depth = 0
+        end = 0
+        for i, ch in enumerate(inner):
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        inner = inner[1:end]
+
+    # Extract return type
+    rest = signature.strip()
+    arrow_pos = rest.rfind("->")
+    if arrow_pos != -1:
+        rest[arrow_pos + 2 :].strip()
+
+    if not inner.strip():
+        return params
+
+    # Split on commas, but respect brackets/parens
+    parts: list[str] = []
+    depth = 0
+    current: list[str] = []
+    for ch in inner:
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append("".join(current).strip())
+            current = []
+        else:
+            current.append(ch)
+    if current:
+        parts.append("".join(current).strip())
+
+    for part in parts:
+        part = part.strip()
+        if not part or part in ("/", "*"):
+            continue
+
+        name = part
+        ptype = ""
+        default = None
+
+        # Handle *args, **kwargs
+        if part.startswith("**"):
+            part = part[2:]
+        elif part.startswith("*"):
+            part = part[1:]
+
+        # Split on = for default
+        eq_pos = part.find("=")
+        if eq_pos != -1:
+            default = part[eq_pos + 1 :].strip()
+            part = part[:eq_pos].strip()
+
+        # Split on : for type
+        colon_pos = part.find(":")
+        if colon_pos != -1:
+            name = part[:colon_pos].strip()
+            ptype = part[colon_pos + 1 :].strip()
+        else:
+            name = part.strip()
+
+        # Skip self/cls
+        if name in ("self", "cls"):
+            continue
+
+        params.append({"name": name, "type": ptype, "default": default or ""})
+
+    return params
+
+
+def _compute_coverage(json_data: dict[str, Any]) -> dict[str, Any]:
+    """Compute documentation coverage scores.
+
+    Cross-references actual signature params with documented Args.
+    """
+    items: list[dict[str, Any]] = []
+    total_score = 0.0
+    count = 0
+
+    for lst in ("functions", "api_endpoints"):
+        for func in json_data.get(lst, []):
+            ds = func.get("docstring", {})
+            sig = func.get("signature", "")
+
+            sig_params = _parse_signature_params(sig)
+            sig_param_names = {p["name"] for p in sig_params}
+            doc_arg_names = {a["name"] for a in ds.get("args", [])}
+
+            has_docstring = bool(ds.get("summary"))
+            has_returns = ds.get("returns") is not None
+            has_examples = bool(ds.get("examples"))
+
+            # Args coverage: what fraction of signature params are documented?
+            if sig_param_names:
+                documented = sig_param_names & doc_arg_names
+                args_ratio = len(documented) / len(sig_param_names)
+                missing_args = sorted(sig_param_names - doc_arg_names)
+            else:
+                args_ratio = 1.0  # no params to document
+                missing_args = []
+
+            # Has return type in signature?
+            has_return_annotation = "->" in sig
+
+            checks = {
+                "has_docstring": has_docstring,
+                "args_documented": len(sig_param_names & doc_arg_names),
+                "args_total": len(sig_param_names),
+                "args_missing": missing_args,
+                "has_returns": has_returns,
+                "has_return_annotation": has_return_annotation,
+                "has_examples": has_examples,
+            }
+
+            # Score: docstring=35%, args=35%, returns=20%, examples=10%
+            score = 0.0
+            if has_docstring:
+                score += 35
+            score += 35 * args_ratio
+            if has_returns:
+                score += 20
+            if has_examples:
+                score += 10
+
+            score = round(score, 1)
+
+            items.append(
+                {
+                    "full_path": func.get("full_path", func["name"]),
+                    "name": func["name"],
+                    "doc_type": func.get("doc_type", "function"),
+                    "score": score,
+                    "checks": checks,
+                }
+            )
+            total_score += score
+            count += 1
+
+    for cls in json_data.get("classes", []):
+        ds = cls.get("docstring", {})
+
+        has_docstring = bool(ds.get("summary"))
+        has_attributes = bool(ds.get("attributes"))
+
+        methods = cls.get("methods", [])
+        documented_methods = sum(
+            1 for m in methods if m.get("docstring", {}).get("summary")
+        )
+        method_ratio = (documented_methods / len(methods)) if methods else 1.0
+
+        checks = {
+            "has_docstring": has_docstring,
+            "has_attributes": has_attributes,
+            "methods_documented": documented_methods,
+            "methods_total": len(methods),
+        }
+
+        score = 0.0
+        if has_docstring:
+            score += 40
+        if has_attributes:
+            score += 25
+        score += 35 * method_ratio
+        score = round(score, 1)
+
+        items.append(
+            {
+                "full_path": cls.get("full_path", cls["name"]),
+                "name": cls["name"],
+                "doc_type": "class",
+                "score": score,
+                "checks": checks,
+            }
+        )
+        total_score += score
+        count += 1
+
+    return {
+        "project_score": round(total_score / count, 1) if count else 0,
+        "total_items": count,
+        "fully_documented": sum(1 for i in items if i["score"] == 100),
+        "undocumented": sum(1 for i in items if i["score"] == 0),
+        "items": items,
+    }
+
+
+def _build_reverse_call_map(json_data: dict[str, Any]) -> dict[str, list[str]]:
+    """Invert the call graph: for each function, who calls it.
+
+    Returns a dict mapping function name -> list of callers.
+    """
+    called_by: dict[str, list[str]] = {}
+
+    for lst in ("functions", "api_endpoints"):
+        for func in json_data.get(lst, []):
+            caller = func.get("full_path", func["name"])
+            for callee in func.get("calls", []):
+                called_by.setdefault(callee, []).append(caller)
+
+    for cls in json_data.get("classes", []):
+        for method in cls.get("methods", []):
+            caller = f"{cls.get('full_path', cls['name'])}.{method['name']}"
+            for callee in method.get("calls", []):
+                called_by.setdefault(callee, []).append(caller)
+
+    # Sort each list for determinism
+    return {k: sorted(v) for k, v in sorted(called_by.items())}
+
+
+def _detect_dead_code(json_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Find functions/methods that are never called by anything internal.
+
+    Excludes: __init__, __main__, decorated endpoints, test functions,
+    and anything starting with 'main'.
+    """
+    called_by = json_data.get("called_by", {})
+    dead: list[dict[str, Any]] = []
+
+    # Build set of all callee names (both full_path and short name forms)
+    all_called: set[str] = set()
+    for callee in called_by:
+        all_called.add(callee)
+
+    # Exclusion patterns
+    skip_names = {
+        "__init__",
+        "__main__",
+        "main",
+        "__str__",
+        "__repr__",
+        "__eq__",
+        "__hash__",
+        "__len__",
+        "__iter__",
+        "__next__",
+        "__enter__",
+        "__exit__",
+        "__call__",
+        "__getattr__",
+        "__setattr__",
+        "__delattr__",
+        "__getitem__",
+        "__setitem__",
+        "__contains__",
+        "__bool__",
+    }
+
+    for lst in ("functions", "api_endpoints"):
+        for func in json_data.get(lst, []):
+            name = func["name"]
+            full_path = func.get("full_path", name)
+
+            # Skip private, dunder, decorated (likely entry points), tests
+            if name.startswith("_"):
+                continue
+            if name in skip_names:
+                continue
+            if func.get("decorators"):
+                continue
+            if name.startswith("test"):
+                continue
+
+            # Check if anyone calls this
+            if full_path not in all_called and name not in all_called:
+                dead.append(
+                    {
+                        "full_path": full_path,
+                        "name": name,
+                        "doc_type": func.get("doc_type", "function"),
+                        "module": func.get("module", ""),
+                    }
+                )
+
+    for cls in json_data.get("classes", []):
+        for method in cls.get("methods", []):
+            name = method["name"]
+            if name.startswith("_") or name in skip_names:
+                continue
+            if method.get("decorators"):
+                continue
+
+            method_path = f"{cls.get('full_path', cls['name'])}.{name}"
+            if method_path not in all_called and name not in all_called:
+                dead.append(
+                    {
+                        "full_path": method_path,
+                        "name": name,
+                        "doc_type": "method",
+                        "module": cls.get("module", ""),
+                    }
+                )
+
+    return dead
+
+
+def _collect_todos(json_data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Collect all TODOs from all modules into a flat list."""
+    todos: list[dict[str, Any]] = []
+    for module in json_data.get("modules", []):
+        todos.extend(module.get("todos", []))
+    return todos
 
 
 def build_json(
@@ -191,13 +793,16 @@ def build_json(
     page_order = config.get("page_order", [])
     if page_order:
         order_map = {slug: i for i, slug in enumerate(page_order)}
-        pages = sorted(pages, key=lambda p: (
-            order_map.get(p.slug, len(page_order)),
-            p.order,
-            p.title,
-        ))
+        pages = sorted(
+            pages,
+            key=lambda p: (
+                order_map.get(p.slug, len(page_order)),
+                p.order,
+                p.title,
+            ),
+        )
 
-    return {
+    json_data = {
         "modules": [_serialize_module(m) for m in modules],
         "classes": all_classes,
         "functions": regular_functions,
@@ -205,6 +810,20 @@ def build_json(
         "pages": [_serialize_page(p) for p in pages],
         "config": config,
     }
+
+    # Coverage scores
+    json_data["coverage"] = _compute_coverage(json_data)
+
+    # Reverse call map
+    json_data["called_by"] = _build_reverse_call_map(json_data)
+
+    # Flat TODO list
+    json_data["todos"] = _collect_todos(json_data)
+
+    # Dead code detection
+    json_data["dead_code"] = _detect_dead_code(json_data)
+
+    return json_data
 
 
 def _chunk_documentation(json_data: dict[str, Any]) -> list[dict[str, str]]:
@@ -224,17 +843,23 @@ def _chunk_documentation(json_data: dict[str, Any]) -> list[dict[str, str]]:
         if ds.get("description"):
             parts.append(ds["description"])
         for arg in ds.get("args", []):
-            parts.append(f"  param {arg['name']}: {arg.get('type', '')} - {arg.get('description', '')}")
+            parts.append(
+                f"  param {arg['name']}: {arg.get('type', '')} - {arg.get('description', '')}"
+            )
         ret = ds.get("returns")
         if ret:
-            parts.append(f"  returns: {ret.get('type', '')} - {ret.get('description', '')}")
+            parts.append(
+                f"  returns: {ret.get('type', '')} - {ret.get('description', '')}"
+            )
         for ex in ds.get("examples", []):
             parts.append(f"  example: {ex}")
-        chunks.append({
-            "text": "\n".join(parts),
-            "source": func.get("full_path", func["name"]),
-            "type": "function",
-        })
+        chunks.append(
+            {
+                "text": "\n".join(parts),
+                "source": func.get("full_path", func["name"]),
+                "type": "function",
+            }
+        )
 
     for ep in json_data.get("api_endpoints", []):
         ds = ep.get("docstring", {})
@@ -246,12 +871,18 @@ def _chunk_documentation(json_data: dict[str, Any]) -> list[dict[str, str]]:
         if ds.get("description"):
             parts.append(ds["description"])
         for param in ds.get("path_params", []) + ds.get("query_params", []):
-            parts.append(f"  param {param['name']}: {param.get('type', '')} - {param.get('description', '')}")
-        chunks.append({
-            "text": "\n".join(parts),
-            "source": f"{method} {path}" if method else ep.get("full_path", ep["name"]),
-            "type": "api",
-        })
+            parts.append(
+                f"  param {param['name']}: {param.get('type', '')} - {param.get('description', '')}"
+            )
+        chunks.append(
+            {
+                "text": "\n".join(parts),
+                "source": f"{method} {path}"
+                if method
+                else ep.get("full_path", ep["name"]),
+                "type": "api",
+            }
+        )
 
     for cls in json_data.get("classes", []):
         ds = cls.get("docstring", {})
@@ -261,21 +892,26 @@ def _chunk_documentation(json_data: dict[str, Any]) -> list[dict[str, str]]:
         if ds.get("description"):
             parts.append(ds["description"])
         for attr in ds.get("attributes", []):
-            parts.append(f"  attr {attr['name']}: {attr.get('type', '')} - {attr.get('description', '')}")
+            parts.append(
+                f"  attr {attr['name']}: {attr.get('type', '')} - {attr.get('description', '')}"
+            )
         for m in cls.get("methods", []):
             mds = m.get("docstring", {})
             parts.append(f"  method {m['name']}: {mds.get('summary', '')}")
-        chunks.append({
-            "text": "\n".join(parts),
-            "source": cls.get("full_path", cls["name"]),
-            "type": "class",
-        })
+        chunks.append(
+            {
+                "text": "\n".join(parts),
+                "source": cls.get("full_path", cls["name"]),
+                "type": "class",
+            }
+        )
 
     for page in json_data.get("pages", []):
         # Split long pages into ~2000 char paragraphs
         content = page.get("content", "")
         # Strip HTML tags for embedding
         import re
+
         clean = re.sub(r"<[^>]+>", " ", content)
         clean = re.sub(r"\s+", " ", clean).strip()
         if not clean:
@@ -283,29 +919,35 @@ def _chunk_documentation(json_data: dict[str, Any]) -> list[dict[str, str]]:
         # Chunk long pages
         max_chunk = 2000
         if len(clean) <= max_chunk:
-            chunks.append({
-                "text": f"Page: {page['title']}\n{clean}",
-                "source": page["title"],
-                "type": "page",
-            })
+            chunks.append(
+                {
+                    "text": f"Page: {page['title']}\n{clean}",
+                    "source": page["title"],
+                    "type": "page",
+                }
+            )
         else:
             sentences = clean.split(". ")
             current = f"Page: {page['title']}\n"
             for sent in sentences:
                 if len(current) + len(sent) > max_chunk:
-                    chunks.append({
-                        "text": current.strip(),
-                        "source": page["title"],
-                        "type": "page",
-                    })
+                    chunks.append(
+                        {
+                            "text": current.strip(),
+                            "source": page["title"],
+                            "type": "page",
+                        }
+                    )
                     current = f"Page: {page['title']} (cont.)\n"
                 current += sent + ". "
             if current.strip():
-                chunks.append({
-                    "text": current.strip(),
-                    "source": page["title"],
-                    "type": "page",
-                })
+                chunks.append(
+                    {
+                        "text": current.strip(),
+                        "source": page["title"],
+                        "type": "page",
+                    }
+                )
 
     return chunks
 
@@ -321,7 +963,7 @@ def _embed_chunks(
         return None
 
     try:
-        from prompture.drivers.embedding_registry import get_embedding_driver_for_model
+        from prompture.drivers.embedding_registry import get_embedding_driver_for_model  # type: ignore[import-not-found]
     except ImportError:
         return None
 
@@ -348,6 +990,7 @@ def _embed_chunks(
         }
     except Exception as e:
         import logging
+
         logging.getLogger("cacaodocs").warning("Embedding failed: %s", e)
         return None
 
@@ -358,7 +1001,11 @@ def _is_light_color(hex_color: str) -> bool:
     if len(hex_color) == 3:
         hex_color = "".join(c * 2 for c in hex_color)
     try:
-        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+        r, g, b = (
+            int(hex_color[0:2], 16),
+            int(hex_color[2:4], 16),
+            int(hex_color[4:6], 16),
+        )
         luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
         return luminance > 0.5
     except (ValueError, IndexError):
@@ -381,8 +1028,7 @@ def _generate_app_code(json_data: dict[str, Any]) -> str:
     version = config.get("version", "")
 
     # Remove non-serializable items from config before embedding
-    safe_config = {k: v for k, v in config.items()
-                   if k not in ("custom_doc_types",)}
+    safe_config = {k: v for k, v in config.items() if k not in ("custom_doc_types",)}
     safe_data = {**json_data, "config": safe_config}
     data_json = json.dumps(safe_data, ensure_ascii=False, default=str)
 
@@ -390,22 +1036,28 @@ def _generate_app_code(json_data: dict[str, Any]) -> str:
     chat_enabled = config.get("chat", False)
     chat_config = config.get("chat_config", {})
     chat_default_model = chat_config.get("default_model", "openai/gpt-4o-mini")
-    chat_models = chat_config.get("models", [
-        "openai/gpt-4o-mini",
-        "openai/gpt-4o",
-        "claude/claude-sonnet-4-20250514",
-        "groq/llama-3.1-8b-instant",
-        "ollama/llama3.1:8b",
-    ])
-    embedding_model = chat_config.get("embedding_model", "openai/text-embedding-3-small")
+    chat_models = chat_config.get(
+        "models",
+        [
+            "openai/gpt-4o-mini",
+            "openai/gpt-4o",
+            "claude/claude-sonnet-4-20250514",
+            "groq/llama-3.1-8b-instant",
+            "ollama/llama3.1:8b",
+        ],
+    )
+    embedding_model = chat_config.get(
+        "embedding_model", "openai/text-embedding-3-small"
+    )
     top_k = chat_config.get("top_k", 5)
-    chat_system_prompt = chat_config.get("system_prompt",
+    chat_system_prompt = chat_config.get(
+        "system_prompt",
         f"You are a helpful assistant that answers questions about the {title} library. "
-        "Be concise and reference specific functions, classes, or modules when relevant."
+        "Be concise and reference specific functions, classes, or modules when relevant.",
     )
 
     if chat_enabled:
-        _chat_state_block = f'''# --- Chat State ---
+        _chat_state_block = f"""# --- Chat State ---
 _chat_api_key = c.signal("", name="chat_api_key")
 _chat_model = c.signal({chat_default_model!r}, name="chat_model")
 _chat_system_prompt = c.signal({chat_system_prompt!r}, name="chat_system_prompt")
@@ -414,11 +1066,11 @@ _show_chat = c.signal(False, name="show_chat")
 
 c.bind("update_chat_api_key", _chat_api_key)
 c.bind("update_chat_model", _chat_model)
-c.bind("update_chat_system_prompt", _chat_system_prompt)'''
+c.bind("update_chat_system_prompt", _chat_system_prompt)"""
 
         _chat_nav_item = ""
 
-        _chat_panel_block = f'''
+        _chat_panel_block = f"""
         # --- Chat (Floating Bubble + Modal) ---
         with c.modal(title="Ask about {title}", signal=_show_chat, size="lg"):
             c.input("API Key", signal=_chat_api_key, type="password",
@@ -472,15 +1124,22 @@ c.bind("update_chat_system_prompt", _chat_system_prompt)'''
 </style>
 <button class="cacaodocs-fab" onclick="window.dispatchEvent(new CustomEvent(\'cacao:signal\', {{detail: {{name: \'show_chat\', value: true}}}}));" aria-label="Open chat">
     <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-</button>\'\'\')'''
+</button>\'\'\')"""
 
         # Generate the static JavaScript for RAG + LLM chat
-        _chat_static_script = '''
+        _chat_static_script = (
+            """
 // --- CacaoDocs AI Chat (RAG + LLM) ---
 (function() {
-  const EMBEDDING_MODEL = ''' + json.dumps(embedding_model) + ''';
-  const TOP_K = ''' + str(top_k) + ''';
-  const SYSTEM_PROMPT = ''' + json.dumps(chat_system_prompt) + ''';
+  const EMBEDDING_MODEL = """
+            + json.dumps(embedding_model)
+            + """;
+  const TOP_K = """
+            + str(top_k)
+            + """;
+  const SYSTEM_PROMPT = """
+            + json.dumps(chat_system_prompt)
+            + """;
 
   let _embeddings = null;
   let _embeddingsLoading = false;
@@ -757,9 +1416,10 @@ c.bind("update_chat_system_prompt", _chat_system_prompt)'''
     SYSTEM_PROMPT,
   };
 })();
-'''
+"""
+        )
 
-        _chat_send_handler = '''async function(signals, event) {
+        _chat_send_handler = """async function(signals, event) {
     const text = (event.text || '').trim();
     if (!text) return;
 
@@ -831,19 +1491,19 @@ c.bind("update_chat_system_prompt", _chat_system_prompt)'''
         window.Cacao.ws.dispatchChat({type: 'chat_done', signal: signalName});
       }
     }
-  }'''
+  }"""
 
-        _chat_clear_handler = '''function(signals, event) {
+        _chat_clear_handler = """function(signals, event) {
     signals.set('chat_messages', []);
     try { localStorage.removeItem('cacao-chat-chat_messages'); } catch {}
-  }'''
+  }"""
 
         # Register static handlers and scripts in app code
-        _chat_static_registration = f'''
+        _chat_static_registration = f"""
 # --- Static Chat Handlers (for GitHub Pages / static export) ---
 c.static_script({_chat_static_script!r})
 c.static_handler("chat_send", {_chat_send_handler!r})
-c.static_handler("chat_clear", {_chat_clear_handler!r})'''
+c.static_handler("chat_clear", {_chat_clear_handler!r})"""
     else:
         _chat_state_block = ""
         _chat_nav_item = ""
@@ -881,13 +1541,13 @@ _CONTENT_MODULES = [m for m in _ALL_MODULES
                     or any(_has_docstring(f) for f in m.get("functions", []))]
 
 _CLASSES = [c for c in _DATA["classes"] if _has_docstring(c)]
-_FUNCTIONS = [f for f in _DATA["functions"] if _has_docstring(f)]
-_API_ENDPOINTS = [e for e in _DATA.get("api_endpoints", []) if _has_docstring(e)]
+_FUNCTIONS = [f for f in _DATA["functions"] if _has_docstring(f) and not f.get("hidden")]
+_API_ENDPOINTS = [e for e in _DATA.get("api_endpoints", []) if _has_docstring(e) and not e.get("hidden")]
 
 # Filter methods within classes
 for cls in _CLASSES:
     cls["methods"] = [m for m in cls.get("methods", [])
-                      if _has_docstring(m) or m["name"] == "__init__"]
+                      if (_has_docstring(m) or m["name"] == "__init__") and not m.get("hidden")]
 
 for mod in _CONTENT_MODULES:
     mod["classes"] = [c for c in mod.get("classes", []) if _has_docstring(c)]
@@ -905,79 +1565,6 @@ c.config(
 {_chat_state_block}
 
 {_chat_static_registration}
-
-# --- Sub-navigation Styles ---
-c.raw_html(\'\'\'<style>
-.cacaodocs-subnav {{
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    position: sticky;
-    top: 0;
-    max-height: calc(100vh - 120px);
-    overflow-y: auto;
-    padding-right: 8px;
-}}
-.cacaodocs-subnav-group {{
-    font-size: 11px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--c-text-muted, #888);
-    padding: 12px 10px 4px;
-}}
-.cacaodocs-subnav-item {{
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    text-decoration: none;
-    color: var(--c-text, inherit);
-    font-size: 13px;
-    transition: background 0.15s;
-    cursor: pointer;
-}}
-.cacaodocs-subnav-item:hover {{
-    background: var(--c-bg-hover, rgba(128,128,128,0.1));
-}}
-.cacaodocs-subnav-name {{
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}}
-.cacaodocs-subnav-path {{
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-family: var(--c-font-mono, monospace);
-    font-size: 12px;
-}}
-.cacaodocs-subnav-badge {{
-    font-size: 11px;
-    color: var(--c-text-muted, #888);
-    min-width: 18px;
-    text-align: center;
-}}
-.cacaodocs-method-badge {{
-    font-size: 10px;
-    font-weight: 700;
-    padding: 1px 6px;
-    border-radius: 3px;
-    min-width: 40px;
-    text-align: center;
-    flex-shrink: 0;
-}}
-.cacaodocs-method-get {{ background: rgba(34,197,94,0.15); color: #22c55e; }}
-.cacaodocs-method-post {{ background: rgba(59,130,246,0.15); color: #3b82f6; }}
-.cacaodocs-method-put {{ background: rgba(234,179,8,0.15); color: #eab308; }}
-.cacaodocs-method-patch {{ background: rgba(234,179,8,0.15); color: #eab308; }}
-.cacaodocs-method-delete {{ background: rgba(239,68,68,0.15); color: #ef4444; }}
-.cacaodocs-method-options {{ background: rgba(128,128,128,0.15); color: #888; }}
-.cacaodocs-method-head {{ background: rgba(128,128,128,0.15); color: #888; }}
-</style>\'\'\')
 
 # --- Helpers ---
 
@@ -1189,11 +1776,46 @@ def _render_function_block(func):
     if func.get("is_property"):
         badges.append(("property", "success"))
 
+    # Deprecation
+    if func.get("is_deprecated"):
+        _dep_since = func.get("deprecation_since", "")
+        badges.append((f"DEPRECATED since {{_dep_since}}" if _dep_since else "DEPRECATED", "danger"))
+
+    # Version
+    _version = func.get("version", "")
+    if _version:
+        badges.append((f"v{{_version}}", "info"))
+
+    # Category
+    _category = func.get("category", "")
+    if _category:
+        badges.append((_category, "default"))
+
+    # Complexity
+    complexity = func.get("complexity", 1)
+    if complexity >= 15:
+        badges.append((f"complexity: {{complexity}}", "danger"))
+    elif complexity >= 8:
+        badges.append((f"complexity: {{complexity}}", "warning"))
+
     if badges:
         c.spacer(1)
         with c.row(gap=2, wrap=True):
             for label, color in badges:
                 c.badge(label, color=color)
+
+    # Deprecation warning
+    if func.get("is_deprecated"):
+        dep_msg = func.get("deprecation_message", "")
+        dep_since = func.get("deprecation_since", "")
+        c.spacer(1)
+        _dep_parts = []
+        if dep_since:
+            _dep_parts.append(f"since {{dep_since}}")
+        if dep_msg:
+            _dep_parts.append(dep_msg)
+        _dep_text = f"Deprecated ({{', '.join(_dep_parts)}})" if _dep_parts else "This function is deprecated."
+        c.text(_dep_text, color="danger")
 
     c.spacer(2)
     _render_docstring(ds)
@@ -1207,6 +1829,18 @@ def _render_function_block(func):
         with c.row(gap=2, wrap=True):
             for call_name in calls:
                 c.badge(call_name, color="default")
+
+    # Used by (reverse call map)
+    _called_by = _DATA.get("called_by", {{}})
+    full_path = func.get("full_path", name)
+    callers = _called_by.get(full_path, []) or _called_by.get(name, [])
+    if callers:
+        c.spacer(2)
+        c.title("Used By", level=4)
+        c.spacer(1)
+        with c.row(gap=2, wrap=True):
+            for caller in callers:
+                c.badge(caller, color="info")
 
     # Source
     if func.get("source"):
@@ -1286,6 +1920,21 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
 
         c.nav_item("Call Map", key="callmap", icon="code")
 
+        with c.nav_group("Insights", icon="bar-chart"):
+            c.nav_item("Dashboard", key="dashboard", icon="bar-chart")
+            _todo_list = _DATA.get("todos", [])
+            if _todo_list:
+                c.nav_item("TODOs", key="todos_panel", icon="alert-circle",
+                            badge=str(len(_todo_list)))
+            _changes_list = _DATA.get("changes", [])
+            if _changes_list:
+                c.nav_item("Changelog", key="changelog_panel", icon="clock",
+                            badge=str(len(_changes_list)))
+            _dead_list = _DATA.get("dead_code", [])
+            if _dead_list:
+                c.nav_item("Dead Code", key="dead_code_panel", icon="trash",
+                            badge=str(len(_dead_list)))
+
         if _PAGES:
             with c.nav_group("Pages", icon="book"):
                 for page in _PAGES:
@@ -1294,7 +1943,6 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
 {_chat_nav_item}
 
     with c.shell_content():
-
         # --- Home ---
         with c.nav_panel("home"):
             c.title({title!r})
@@ -1393,20 +2041,17 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
                             mod = cls.get("module", "")
                             _cls_by_mod.setdefault(mod, []).append(cls)
 
-                        _cls_nav_html = '<div class="cacaodocs-subnav">'
-                        for mod, classes in _cls_by_mod.items():
-                            if mod:
-                                _cls_nav_html += f'<div class="cacaodocs-subnav-group">{{mod}}</div>'
-                            for cls in classes:
-                                method_count = len(cls.get("methods", []))
-                                _cls_nav_html += (
-                                    f'<a class="cacaodocs-subnav-item" href="#type_{{cls["full_path"]}}">'
-                                    f'<span class="cacaodocs-subnav-name">{{cls["name"]}}</span>'
-                                    f'<span class="cacaodocs-subnav-badge">{{method_count}}</span>'
-                                    f'</a>'
-                                )
-                        _cls_nav_html += '</div>'
-                        c.raw_html(_cls_nav_html)
+                        with c.subnav(searchable=True):
+                            for mod, classes in _cls_by_mod.items():
+                                if mod:
+                                    c.subnav_group(mod)
+                                for cls in classes:
+                                    method_count = len(cls.get("methods", []))
+                                    c.subnav_item(
+                                        cls["name"],
+                                        badge=str(method_count),
+                                        target=f'type_{{cls["full_path"]}}',
+                                    )
 
                     with _tl.main():
                         c.title("Types Reference", level=2)
@@ -1434,22 +2079,20 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
                             prefix = "/" + path.strip("/").split("/")[0] if path.strip("/") else "/"
                             _ep_groups.setdefault(prefix, []).append(ep)
 
-                        _api_nav_html = '<div class="cacaodocs-subnav">'
-                        for prefix, eps in _ep_groups.items():
-                            _api_nav_html += f'<div class="cacaodocs-subnav-group">{{prefix}}</div>'
-                            for ep in eps:
-                                ds = ep.get("docstring", {{}})
-                                method = ds.get("http_method", "GET")
-                                path = ds.get("path", ep["name"])
-                                method_cls = method.lower()
-                                _api_nav_html += (
-                                    f'<a class="cacaodocs-subnav-item" href="#ep_{{ep["full_path"]}}">'
-                                    f'<span class="cacaodocs-method-badge cacaodocs-method-{{method_cls}}">{{method}}</span>'
-                                    f'<span class="cacaodocs-subnav-path">{{path}}</span>'
-                                    f'</a>'
-                                )
-                        _api_nav_html += '</div>'
-                        c.raw_html(_api_nav_html)
+                        _TAG_COLORS = {{"GET": "success", "POST": "info", "PUT": "warning", "PATCH": "warning", "DELETE": "danger"}}
+                        with c.subnav(searchable=True):
+                            for prefix, eps in _ep_groups.items():
+                                c.subnav_group(prefix)
+                                for ep in eps:
+                                    ds = ep.get("docstring", {{}})
+                                    method = ds.get("http_method", "GET")
+                                    path = ds.get("path", ep["name"])
+                                    c.subnav_item(
+                                        path,
+                                        tag=method,
+                                        tag_color=_TAG_COLORS.get(method),
+                                        target=f'ep_{{ep["full_path"]}}',
+                                    )
 
                     with _al.main():
                         c.title("API Reference", level=2)
@@ -1572,6 +2215,181 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
             else:
                 c.text("No call relationships found.", color="muted")
 
+        # --- Dashboard Panel ---
+        with c.nav_panel("dashboard"):
+            c.title("Dashboard", level=2)
+            c.text("Project health and code insights.", color="muted")
+            c.spacer(4)
+
+            # Coverage
+            _cov = _DATA.get("coverage", {{}})
+            _score = _cov.get("project_score", 0)
+            _score_color = "success" if _score >= 80 else ("warning" if _score >= 50 else "danger")
+            with c.row(wrap=True, gap=4):
+                c.metric("Doc Coverage", f"{{_score}}%")
+                c.metric("Fully Documented", _cov.get("fully_documented", 0))
+                c.metric("Undocumented", _cov.get("undocumented", 0))
+                c.metric("Total Items", _cov.get("total_items", 0))
+
+            c.spacer(4)
+            c.title("TODOs & Debt", level=3)
+            c.spacer(2)
+            _all_todos = _DATA.get("todos", [])
+            _all_dead = _DATA.get("dead_code", [])
+            _all_deprecated = [f for f in _FUNCTIONS + _API_ENDPOINTS if f.get("is_deprecated")]
+            with c.row(wrap=True, gap=4):
+                c.metric("TODOs", len([t for t in _all_todos if t.get("tag") == "TODO"]))
+                c.metric("FIXMEs", len([t for t in _all_todos if t.get("tag") == "FIXME"]))
+                c.metric("Deprecated", len(_all_deprecated))
+                c.metric("Dead Code", len(_all_dead))
+
+            # Complexity hotspots
+            c.spacer(4)
+            c.title("Complexity Hotspots", level=3)
+            c.spacer(2)
+            _all_items = _FUNCTIONS + _API_ENDPOINTS
+            for cls in _CLASSES:
+                for m in cls.get("methods", []):
+                    _all_items.append({{**m, "full_path": f'{{cls["full_path"]}}.{{m["name"]}}'}})
+            _complex = sorted([f for f in _all_items if f.get("complexity", 1) >= 6],
+                              key=lambda x: x.get("complexity", 1), reverse=True)[:15]
+            if _complex:
+                _cx_table = []
+                for f in _complex:
+                    cx = f.get("complexity", 1)
+                    _cx_table.append({{
+                        "Function": f.get("full_path", f["name"]),
+                        "Complexity": cx,
+                        "Level": "High" if cx >= 15 else ("Medium" if cx >= 8 else "Low"),
+                    }})
+                c.table(_cx_table, paginate=False)
+            else:
+                c.text("No high-complexity functions found.", color="muted")
+
+            # Coverage per item
+            c.spacer(4)
+            c.title("Coverage Details", level=3)
+            c.spacer(2)
+            _cov_items = _cov.get("items", [])
+            if _cov_items:
+                _low_cov = sorted([i for i in _cov_items if i["score"] < 100],
+                                  key=lambda x: x["score"])[:20]
+                if _low_cov:
+                    _cov_table = []
+                    for i in _low_cov:
+                        checks = i.get("checks", {{}})
+                        missing = checks.get("args_missing", [])
+                        _cov_table.append({{
+                            "Name": i["name"],
+                            "Type": i["doc_type"],
+                            "Score": f'{{i["score"]}}%',
+                            "Missing Args": ", ".join(missing) if missing else "",
+                        }})
+                    c.table(_cov_table, paginate=False)
+                else:
+                    c.text("All items are fully documented!", color="success")
+
+        # --- TODOs Panel ---
+        _todo_list_panel = _DATA.get("todos", [])
+        if _todo_list_panel:
+            with c.nav_panel("todos_panel"):
+                c.title("TODOs", level=2)
+                c.text("TODO, FIXME, HACK, and XXX comments found in source code.", color="muted")
+                c.spacer(4)
+
+                _tag_counts = {{}}
+                for t in _todo_list_panel:
+                    _tag_counts[t["tag"]] = _tag_counts.get(t["tag"], 0) + 1
+                with c.row(wrap=True, gap=4):
+                    for tag, cnt in sorted(_tag_counts.items()):
+                        _tc = "danger" if tag == "FIXME" else ("warning" if tag in ("HACK", "XXX") else "info")
+                        c.metric(tag, cnt)
+
+                c.spacer(3)
+                _todo_table = []
+                for t in _todo_list_panel:
+                    _todo_table.append({{
+                        "Tag": t["tag"],
+                        "Message": t["text"],
+                        "Module": t.get("module", ""),
+                        "Line": t.get("line_number", ""),
+                    }})
+                c.table(_todo_table, searchable=True, page_size=25)
+
+        # --- Changelog Panel ---
+        _changes_panel = _DATA.get("changes", [])
+        if _changes_panel:
+            with c.nav_panel("changelog_panel"):
+                c.title("Recent Changes", level=2)
+                c.text("Functions and endpoints that changed since the last build.", color="muted")
+                c.spacer(4)
+
+                _ch_counts = {{}}
+                for ch in _changes_panel:
+                    _ch_counts[ch["change"]] = _ch_counts.get(ch["change"], 0) + 1
+                with c.row(wrap=True, gap=4):
+                    for chtype, cnt in sorted(_ch_counts.items()):
+                        c.metric(chtype.replace("+", " + ").title(), cnt)
+
+                c.spacer(3)
+                _breaking = _DATA.get("breaking_changes", [])
+                if _breaking:
+                    c.title("Breaking Changes", level=3)
+                    c.spacer(2)
+                    for b in _breaking:
+                        with c.card(b["full_path"]):
+                            for d in b.get("details", []):
+                                _icon = "!!" if d.get("breaking") else ""
+                                if d["type"] == "arg_removed":
+                                    c.text(f'{{_icon}} Argument removed: {{d["arg"]}}', color="danger")
+                                elif d["type"] == "required_arg_added":
+                                    c.text(f'{{_icon}} Required argument added: {{d["arg"]}}', color="danger")
+                                elif d["type"] == "type_changed":
+                                    c.text(f'{{_icon}} Type changed: {{d["arg"]}} ({{d["from"]}} -> {{d["to"]}})', color="warning")
+                                elif d["type"] == "return_type_changed":
+                                    c.text(f'{{_icon}} Return type changed: {{d["from"]}} -> {{d["to"]}}', color="warning")
+                                elif d["type"] == "optional_arg_added":
+                                    c.text(f'Optional argument added: {{d["arg"]}}', color="success")
+                    c.spacer(3)
+
+                c.title("All Changes", level=3)
+                c.spacer(2)
+                _ch_table = []
+                for ch in _changes_panel:
+                    _ch_color = {{"new": "success", "removed": "danger", "signature": "warning",
+                                 "body": "info", "signature+body": "danger"}}
+                    _ch_table.append({{
+                        "Name": ch["name"],
+                        "Type": ch["doc_type"],
+                        "Change": ch["change"],
+                        "Path": ch["full_path"],
+                    }})
+                c.table(_ch_table, searchable=True, page_size=25)
+
+        # --- Dead Code Panel ---
+        _dead_panel = _DATA.get("dead_code", [])
+        if _dead_panel:
+            with c.nav_panel("dead_code_panel"):
+                c.title("Dead Code", level=2)
+                c.text("Public functions and methods with no internal callers.", color="muted")
+                c.spacer(4)
+
+                c.metric("Potentially Unused", len(_dead_panel))
+                c.spacer(3)
+
+                _dc_table = []
+                for d in _dead_panel:
+                    _dc_table.append({{
+                        "Function": d["full_path"],
+                        "Type": d["doc_type"],
+                        "Module": d.get("module", ""),
+                    }})
+                c.table(_dc_table, searchable=True, page_size=25)
+
+                c.spacer(2)
+                c.text("Note: Entry points, decorated functions, and private methods are excluded. "
+                       "These may still be used externally.", size="sm", color="muted")
+
         # --- Page Panels ---
         for page in _PAGES:
             with c.nav_panel(f"page_{{page['slug']}}"):
@@ -1621,17 +2439,66 @@ def build_docs(
     output_dir = Path(output)
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Compare against previous build to detect changes + breaking changes
+    data_path = output_dir / "data.json"
+    if data_path.exists():
+        try:
+            with open(data_path, "r", encoding="utf-8") as f:
+                old_data = json.load(f)
+            changes = _compute_changes(old_data, json_data)
+            if changes:
+                json_data["changes"] = changes
+            breaking = _detect_breaking_changes(old_data, json_data)
+            if breaking:
+                json_data["breaking_changes"] = breaking
+        except (json.JSONDecodeError, KeyError):
+            pass
+
+    # Append to changelog
+    changelog_path = output_dir / "changelog.json"
+    changes_list = json_data.get("changes", [])
+    breaking_list = json_data.get("breaking_changes", [])
+    if changes_list or breaking_list:
+        from datetime import datetime, timezone
+
+        existing_changelog: list[dict[str, Any]] = []
+        if changelog_path.exists():
+            try:
+                with open(changelog_path, "r", encoding="utf-8") as f:
+                    existing_changelog = json.load(f)
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        entry: dict[str, Any] = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "changes": changes_list,
+        }
+        if breaking_list:
+            entry["breaking_changes"] = breaking_list
+
+        existing_changelog.append(entry)
+
+        with open(changelog_path, "w", encoding="utf-8") as f:
+            json.dump(existing_changelog, f, indent=2, ensure_ascii=False, default=str)
+
     # Embedding step (if chat is enabled)
     chat_enabled = config.get("chat", False)
     if chat_enabled:
         chat_config = config.get("chat_config", {})
-        embedding_model = chat_config.get("embedding_model", "openai/text-embedding-3-small")
+        embedding_model = chat_config.get(
+            "embedding_model", "openai/text-embedding-3-small"
+        )
 
         chunks = _chunk_documentation(json_data)
         if chunks:
             import logging
+
             logger = logging.getLogger("cacaodocs")
-            logger.info("Embedding %d documentation chunks with %s...", len(chunks), embedding_model)
+            logger.info(
+                "Embedding %d documentation chunks with %s...",
+                len(chunks),
+                embedding_model,
+            )
 
             embeddings = _embed_chunks(chunks, embedding_model)
             if embeddings:
@@ -1648,7 +2515,9 @@ def build_docs(
                     "Embedding failed. Chat will work without RAG context. "
                     "Ensure %s is available (e.g. `ollama pull %s`).",
                     embedding_model,
-                    embedding_model.split("/", 1)[-1] if "/" in embedding_model else embedding_model,
+                    embedding_model.split("/", 1)[-1]
+                    if "/" in embedding_model
+                    else embedding_model,
                 )
 
     app_code = _generate_app_code(json_data)

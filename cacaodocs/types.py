@@ -1,4 +1,5 @@
 """Data structures for parsed documentation."""
+
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
@@ -9,6 +10,7 @@ class DocType(str, Enum):
 
     Each type changes how docstrings are parsed and displayed.
     """
+
     FUNCTION = "function"
     API = "api"
     CLASS = "class"
@@ -20,9 +22,11 @@ class DocType(str, Enum):
 
 # --- Shared doc atoms ---
 
+
 @dataclass
 class ArgDoc:
     """Represents a function/method argument or parameter."""
+
     name: str
     type: str
     description: str
@@ -33,6 +37,7 @@ class ArgDoc:
 @dataclass
 class ReturnDoc:
     """Represents return value documentation."""
+
     type: str
     description: str
 
@@ -40,15 +45,18 @@ class ReturnDoc:
 @dataclass
 class RaiseDoc:
     """Represents an exception that may be raised."""
+
     type: str
     description: str
 
 
 # --- API-specific types ---
 
+
 @dataclass
 class ResponseDoc:
     """Represents an API response for a specific status code."""
+
     status_code: int
     description: str
     fields: list[ArgDoc] = field(default_factory=list)
@@ -57,6 +65,7 @@ class ResponseDoc:
 @dataclass
 class HeaderDoc:
     """Represents an HTTP header."""
+
     name: str
     description: str
     required: bool = False
@@ -65,9 +74,11 @@ class HeaderDoc:
 
 # --- Event-specific types ---
 
+
 @dataclass
 class PayloadFieldDoc:
     """Represents a field in an event payload."""
+
     name: str
     type: str
     description: str
@@ -75,9 +86,11 @@ class PayloadFieldDoc:
 
 # --- Config-specific types ---
 
+
 @dataclass
 class ConfigFieldDoc:
     """Represents a configuration field or env var."""
+
     name: str
     type: str
     description: str
@@ -88,9 +101,11 @@ class ConfigFieldDoc:
 
 # --- Custom type definition ---
 
+
 @dataclass
 class CustomSectionDef:
     """Definition for a custom section in a user-defined doc type."""
+
     name: str
     format: str = "text"  # "text", "args", "code", "list"
 
@@ -98,6 +113,7 @@ class CustomSectionDef:
 @dataclass
 class CustomDocTypeDef:
     """User-defined doc type from cacao.yaml."""
+
     name: str
     label: str
     icon: str = "file"
@@ -106,9 +122,11 @@ class CustomDocTypeDef:
 
 # --- Parsed docstring (extended) ---
 
+
 @dataclass
 class ParsedDocstring:
     """Parsed docstring with sections for all doc types."""
+
     summary: str = ""
     description: str = ""
     doc_type: DocType = DocType.FUNCTION
@@ -143,9 +161,11 @@ class ParsedDocstring:
 
 # --- Document-level types ---
 
+
 @dataclass
 class MethodDoc:
     """Represents a class method."""
+
     name: str
     module: str
     signature: str
@@ -159,11 +179,21 @@ class MethodDoc:
     decorators: list[str] = field(default_factory=list)
     calls: list[str] = field(default_factory=list)
     doc_type: DocType = DocType.FUNCTION
+    signature_hash: str = ""
+    body_hash: str = ""
+    complexity: int = 1
+    is_deprecated: bool = False
+    deprecation_message: str = ""
+    deprecation_since: str = ""
+    category: str = ""
+    version: str = ""
+    hidden: bool = False
 
 
 @dataclass
 class FunctionDoc:
     """Represents a standalone function."""
+
     name: str
     module: str
     full_path: str
@@ -175,11 +205,21 @@ class FunctionDoc:
     decorators: list[str] = field(default_factory=list)
     calls: list[str] = field(default_factory=list)
     doc_type: DocType = DocType.FUNCTION
+    signature_hash: str = ""
+    body_hash: str = ""
+    complexity: int = 1
+    is_deprecated: bool = False
+    deprecation_message: str = ""
+    deprecation_since: str = ""
+    category: str = ""
+    version: str = ""
+    hidden: bool = False
 
 
 @dataclass
 class ClassDoc:
     """Represents a class."""
+
     name: str
     module: str
     full_path: str
@@ -190,22 +230,38 @@ class ClassDoc:
     line_number: int
     decorators: list[str] = field(default_factory=list)
     doc_type: DocType = DocType.CLASS
+    signature_hash: str = ""
+    body_hash: str = ""
+
+
+@dataclass
+class TodoDoc:
+    """A TODO/FIXME/HACK comment found in source code."""
+
+    tag: str  # "TODO", "FIXME", "HACK", "XXX"
+    text: str
+    file_path: str
+    line_number: int
+    module: str = ""
 
 
 @dataclass
 class ModuleDoc:
     """Represents a Python module."""
+
     name: str
     full_path: str  # e.g., "cacao.server.signal"
     file_path: str
     docstring: str
     classes: list[ClassDoc] = field(default_factory=list)
     functions: list[FunctionDoc] = field(default_factory=list)
+    todos: list[TodoDoc] = field(default_factory=list)
 
 
 @dataclass
 class PageDoc:
     """Represents a Markdown documentation page."""
+
     title: str
     slug: str
     content: str  # HTML from markdown
@@ -217,6 +273,7 @@ class PageDoc:
 @dataclass
 class DocumentationData:
     """Complete documentation data structure."""
+
     modules: list[ModuleDoc] = field(default_factory=list)
     pages: list[PageDoc] = field(default_factory=list)
     config: dict = field(default_factory=dict)

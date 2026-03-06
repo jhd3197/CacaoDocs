@@ -3,8 +3,9 @@
 Parses Google-style docstrings extended with CacaoDocs doc types.
 Supports built-in types (function, api, config, event) and custom types.
 """
+
 import re
-from typing import Any, Optional
+from typing import Optional
 
 from .types import (
     ArgDoc,
@@ -85,7 +86,7 @@ class DocstringParser:
 
         # Add custom section headers
         all_headers = list(self.SECTION_HEADERS)
-        for ct in (custom_types or []):
+        for ct in custom_types or []:
             for section in ct.sections:
                 if section.name not in all_headers:
                     all_headers.append(section.name)
@@ -106,7 +107,9 @@ class DocstringParser:
         # Pattern for type annotation in return
         self.return_type_pattern = re.compile(r"^([^:]+):\s*(.*)$")
 
-    def parse(self, docstring: Optional[str], hint_type: DocType | None = None) -> ParsedDocstring:
+    def parse(
+        self, docstring: Optional[str], hint_type: DocType | None = None
+    ) -> ParsedDocstring:
         """Parse a docstring into structured sections.
 
         Args:
@@ -145,10 +148,12 @@ class DocstringParser:
             trigger=directives.get("trigger", ""),
         )
 
-        description_parts = []
+        description_parts: list[str] = []
 
         for section_name, section_content in sections:
-            self._parse_section(section_name, section_content, result, description_parts)
+            self._parse_section(
+                section_name, section_content, result, description_parts
+            )
 
         # Parse response sections
         for status_code, content in response_sections:
@@ -157,18 +162,22 @@ class DocstringParser:
             for line in content.split("\n"):
                 match = self.arg_pattern.match(line)
                 if match:
-                    fields.append(ArgDoc(
-                        name=match.group(1),
-                        type=match.group(2) or "",
-                        description=match.group(3) or "",
-                    ))
+                    fields.append(
+                        ArgDoc(
+                            name=match.group(1),
+                            type=match.group(2) or "",
+                            description=match.group(3) or "",
+                        )
+                    )
                 elif line.strip() and not fields:
                     desc_lines.append(line.strip())
-            result.responses.append(ResponseDoc(
-                status_code=status_code,
-                description=" ".join(desc_lines),
-                fields=fields,
-            ))
+            result.responses.append(
+                ResponseDoc(
+                    status_code=status_code,
+                    description=" ".join(desc_lines),
+                    fields=fields,
+                )
+            )
 
         result.description = "\n\n".join(description_parts)
 
@@ -179,7 +188,9 @@ class DocstringParser:
 
         return result
 
-    def _extract_type_directive(self, docstring: str, hint: DocType | None) -> tuple[DocType, str]:
+    def _extract_type_directive(
+        self, docstring: str, hint: DocType | None
+    ) -> tuple[DocType, str]:
         """Extract the Type: directive from the docstring."""
         lines = docstring.split("\n")
         new_lines = []
@@ -248,7 +259,9 @@ class DocstringParser:
         rest = "\n".join(lines[rest_start:])
         return summary, rest
 
-    def _split_sections(self, text: str) -> tuple[list[tuple[str, str]], list[tuple[int, str]]]:
+    def _split_sections(
+        self, text: str
+    ) -> tuple[list[tuple[str, str]], list[tuple[int, str]]]:
         """Split text into named sections and response sections."""
         if not text.strip():
             return [], []
@@ -266,8 +279,11 @@ class DocstringParser:
             if resp_match:
                 # Save previous
                 self._save_current(
-                    current_section, current_content, current_response_code,
-                    sections, response_sections,
+                    current_section,
+                    current_content,
+                    current_response_code,
+                    sections,
+                    response_sections,
                 )
                 current_response_code = int(resp_match.group(1))
                 current_section = ""
@@ -278,8 +294,11 @@ class DocstringParser:
             match = self.section_pattern.match(line)
             if match:
                 self._save_current(
-                    current_section, current_content, current_response_code,
-                    sections, response_sections,
+                    current_section,
+                    current_content,
+                    current_response_code,
+                    sections,
+                    response_sections,
                 )
                 current_section = match.group(1)
                 current_response_code = None
@@ -289,8 +308,11 @@ class DocstringParser:
 
         # Save last
         self._save_current(
-            current_section, current_content, current_response_code,
-            sections, response_sections,
+            current_section,
+            current_content,
+            current_response_code,
+            sections,
+            response_sections,
         )
 
         return sections, response_sections
@@ -382,7 +404,7 @@ class DocstringParser:
         result = [lines[0].strip()]
         for line in lines[1:]:
             if line.strip():
-                result.append(line[int(min_indent):])
+                result.append(line[int(min_indent) :])
             else:
                 result.append("")
 
@@ -415,7 +437,9 @@ class DocstringParser:
                 # Check for "required" marker
                 if "required" in type_hint.lower():
                     required = True
-                    type_hint = re.sub(r",?\s*required", "", type_hint, flags=re.IGNORECASE).strip()
+                    type_hint = re.sub(
+                        r",?\s*required", "", type_hint, flags=re.IGNORECASE
+                    ).strip()
 
                 current_arg = ArgDoc(
                     name=name,
@@ -525,11 +549,13 @@ class DocstringParser:
                 meta = match.group(2) or ""
                 desc = match.group(3) or ""
                 required = "required" in meta.lower()
-                headers.append(HeaderDoc(
-                    name=name,
-                    description=desc.strip(),
-                    required=required,
-                ))
+                headers.append(
+                    HeaderDoc(
+                        name=name,
+                        description=desc.strip(),
+                        required=required,
+                    )
+                )
         return headers
 
     def _parse_payload(self, content: str) -> list[PayloadFieldDoc]:
@@ -538,11 +564,13 @@ class DocstringParser:
         for line in content.split("\n"):
             match = self.arg_pattern.match(line)
             if match:
-                fields.append(PayloadFieldDoc(
-                    name=match.group(1),
-                    type=match.group(2) or "",
-                    description=match.group(3) or "",
-                ))
+                fields.append(
+                    PayloadFieldDoc(
+                        name=match.group(1),
+                        type=match.group(2) or "",
+                        description=match.group(3) or "",
+                    )
+                )
         return fields
 
     def _parse_config_fields(self, content: str) -> list[ConfigFieldDoc]:

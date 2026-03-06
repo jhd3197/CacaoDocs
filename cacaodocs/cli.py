@@ -1,4 +1,5 @@
 """Command-line interface for CacaoDocs."""
+
 import subprocess
 import sys
 from pathlib import Path
@@ -15,8 +16,12 @@ def cli():
 
 @cli.command()
 @click.argument("source", type=click.Path(exists=True))
-@click.option("-o", "--output", type=click.Path(), default="./docs", help="Output directory.")
-@click.option("-c", "--config", type=click.Path(), default=None, help="Path to cacao.yaml.")
+@click.option(
+    "-o", "--output", type=click.Path(), default="./docs", help="Output directory."
+)
+@click.option(
+    "-c", "--config", type=click.Path(), default=None, help="Path to cacao.yaml."
+)
 @click.option("-v", "--verbose", is_flag=True, help="Verbose output.")
 def build(source: str, output: str, config: str | None, verbose: bool):
     """Build documentation from Python source files.
@@ -76,6 +81,7 @@ def build(source: str, output: str, config: str | None, verbose: bool):
         click.echo(click.style(f"Error: {e}", fg="red"), err=True)
         if verbose:
             import traceback
+
             traceback.print_exc()
         sys.exit(1)
 
@@ -84,7 +90,7 @@ def build(source: str, output: str, config: str | None, verbose: bool):
 @click.argument("directory", type=click.Path(exists=True), default="./docs")
 @click.option("-p", "--port", type=int, default=1502, help="Port to serve on.")
 @click.option("--host", type=str, default="127.0.0.1", help="Host to bind to.")
-def serve(directory: str, port: int, host: str):
+def serve(directory: str | Path, port: int, host: str):
     """Serve generated documentation using Cacao.
 
     DIRECTORY is the path to the generated docs (default: ./docs).
@@ -116,7 +122,9 @@ def serve(directory: str, port: int, host: str):
         )
     except FileNotFoundError:
         click.echo(
-            click.style("Error: Cacao not found. Install it: pip install cacao", fg="red"),
+            click.style(
+                "Error: Cacao not found. Install it: pip install cacao", fg="red"
+            ),
             err=True,
         )
         sys.exit(1)
@@ -126,9 +134,20 @@ def serve(directory: str, port: int, host: str):
 
 @cli.command()
 @click.argument("directory", type=click.Path(exists=True), default="./docs")
-@click.option("-o", "--output", type=click.Path(), default="./dist", help="Output directory for static site.")
-@click.option("--base-path", type=str, default="", help="Base path for deployment (e.g., /my-repo for GitHub Pages).")
-def export(directory: str, output: str, base_path: str):
+@click.option(
+    "-o",
+    "--output",
+    type=click.Path(),
+    default="./dist",
+    help="Output directory for static site.",
+)
+@click.option(
+    "--base-path",
+    type=str,
+    default="",
+    help="Base path for deployment (e.g., /my-repo for GitHub Pages).",
+)
+def export(directory: str | Path, output: str | Path, base_path: str):
     """Export documentation as a static HTML site.
 
     DIRECTORY is the path to the generated docs (default: ./docs).
@@ -167,6 +186,7 @@ def export(directory: str, output: str, base_path: str):
         embeddings_src = directory / "embeddings.json"
         if embeddings_src.exists():
             import shutil
+
             shutil.copy2(embeddings_src, output_path / "embeddings.json")
 
         click.echo()
@@ -179,7 +199,9 @@ def export(directory: str, output: str, base_path: str):
         click.echo(f"  python -m http.server -d {output_path}")
     except FileNotFoundError:
         click.echo(
-            click.style("Error: Cacao not found. Install it: pip install cacao", fg="red"),
+            click.style(
+                "Error: Cacao not found. Install it: pip install cacao", fg="red"
+            ),
             err=True,
         )
         sys.exit(1)
@@ -192,7 +214,9 @@ def export(directory: str, output: str, base_path: str):
 
 
 @cli.command()
-@click.option("-o", "--output", type=click.Path(), default="cacao.yaml", help="Output path.")
+@click.option(
+    "-o", "--output", type=click.Path(), default="cacao.yaml", help="Output path."
+)
 @click.option("-f", "--force", is_flag=True, help="Overwrite existing file.")
 def init(output: str, force: bool):
     """Create a default cacao.yaml configuration file."""
@@ -202,7 +226,10 @@ def init(output: str, force: bool):
 
     if output_path.exists() and not force:
         click.echo(
-            click.style(f"Error: {output_path} already exists. Use --force to overwrite.", fg="red"),
+            click.style(
+                f"Error: {output_path} already exists. Use --force to overwrite.",
+                fg="red",
+            ),
             err=True,
         )
         sys.exit(1)
