@@ -124,8 +124,7 @@ def _hash_body_per_statement(node: ast.FunctionDef | ast.AsyncFunctionDef) -> li
     ):
         body = body[1:]
     return [
-        hashlib.sha256(_normalize_ast(stmt).encode()).hexdigest()[:16]
-        for stmt in body
+        hashlib.sha256(_normalize_ast(stmt).encode()).hexdigest()[:16] for stmt in body
     ]
 
 
@@ -1017,7 +1016,10 @@ class Scanner:
             doc_type=parsed.doc_type,
             signature_hash=_hash_signature(node),
             body_hash=_hash_body(node),
+            body_statement_hashes=_hash_body_per_statement(node),
+            call_graph_hash=_call_graph_hash(node),
             complexity=_cyclomatic_complexity(node),
+            cognitive_weight=_cognitive_weight(node),
             is_deprecated=is_deprecated,
             deprecation_message=dep_msg,
             deprecation_since=dep_since,
