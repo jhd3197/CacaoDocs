@@ -33,7 +33,7 @@ setup(
     install_requires=[
         "click>=8.0.0",
         "Markdown>=3.4",
-        "cacao>=2.1.0",  # 2.1.0+ includes PyYAML and cacao.yaml config system
+        "cacao>=2.0.16",  # 2.0.16+ includes LLM chat, plugin slots, extensions
     ],
     entry_points={
         'console_scripts': [

@@ -4,6 +4,7 @@ from .scanner import Scanner, scan_directory
 from .parser import DocstringParser
 from .config import load_config, create_default_config
 from .builder import build_docs
+from .plugin import plug
 from .types import (
     DocType,
     ModuleDoc,
@@ -92,6 +93,7 @@ def doc(**kwargs):
 
 __all__ = [
     "build_docs",
+    "plug",
     "doc",
     "Scanner",
     "scan_directory",
