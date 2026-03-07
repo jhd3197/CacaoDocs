@@ -181,7 +181,10 @@ class MethodDoc:
     doc_type: DocType = DocType.FUNCTION
     signature_hash: str = ""
     body_hash: str = ""
+    body_statement_hashes: list[str] = field(default_factory=list)
+    call_graph_hash: str = ""
     complexity: int = 1
+    cognitive_weight: int = 0
     is_deprecated: bool = False
     deprecation_message: str = ""
     deprecation_since: str = ""
@@ -207,7 +210,10 @@ class FunctionDoc:
     doc_type: DocType = DocType.FUNCTION
     signature_hash: str = ""
     body_hash: str = ""
+    body_statement_hashes: list[str] = field(default_factory=list)
+    call_graph_hash: str = ""
     complexity: int = 1
+    cognitive_weight: int = 0
     is_deprecated: bool = False
     deprecation_message: str = ""
     deprecation_since: str = ""

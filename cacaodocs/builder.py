@@ -1014,6 +1014,8 @@ def _is_light_color(hex_color: str) -> bool:
 
 def _generate_app_code(json_data: dict[str, Any]) -> str:
     """Generate the Cacao app Python code for the documentation."""
+    from . import __version__ as self_version
+
     config = json_data.get("config", {})
     title = config.get("title", "Documentation")
     description = config.get("description", "")
@@ -1027,29 +1029,10 @@ def _generate_app_code(json_data: dict[str, Any]) -> str:
         theme = raw_theme
     version = config.get("version", "")
 
-    # Remove non-serializable items from config before embedding
-    safe_config = {k: v for k, v in config.items() if k not in ("custom_doc_types",)}
-    safe_data = {**json_data, "config": safe_config}
-    data_json = json.dumps(safe_data, ensure_ascii=False, default=str)
-
     # Chat configuration
     chat_enabled = config.get("chat", False)
     chat_config = config.get("chat_config", {})
     chat_default_model = chat_config.get("default_model", "openai/gpt-4o-mini")
-    chat_models = chat_config.get(
-        "models",
-        [
-            "openai/gpt-4o-mini",
-            "openai/gpt-4o",
-            "claude/claude-sonnet-4-20250514",
-            "groq/llama-3.1-8b-instant",
-            "ollama/llama3.1:8b",
-        ],
-    )
-    embedding_model = chat_config.get(
-        "embedding_model", "openai/text-embedding-3-small"
-    )
-    top_k = chat_config.get("top_k", 5)
     chat_system_prompt = chat_config.get(
         "system_prompt",
         f"You are a helpful assistant that answers questions about the {title} library. "
@@ -1057,36 +1040,34 @@ def _generate_app_code(json_data: dict[str, Any]) -> str:
     )
 
     if chat_enabled:
-        _chat_state_block = f"""# --- Chat State ---
-_chat_api_key = c.signal("", name="chat_api_key")
-_chat_model = c.signal({chat_default_model!r}, name="chat_model")
-_chat_system_prompt = c.signal({chat_system_prompt!r}, name="chat_system_prompt")
-_chat_messages = c.signal([], name="chat_messages")
-_show_chat = c.signal(False, name="show_chat")
+        # Parse provider/model from "provider/model" format
+        _parts = chat_default_model.split("/", 1)
+        _provider = _parts[0] if len(_parts) > 1 else "openai"
+        _model = _parts[1] if len(_parts) > 1 else _parts[0]
 
-c.bind("update_chat_api_key", _chat_api_key)
-c.bind("update_chat_model", _chat_model)
-c.bind("update_chat_system_prompt", _chat_system_prompt)"""
+        # Build RAG context summary from chunked docs (embedded in system prompt)
+        _rag_chunks = _chunk_documentation(json_data)
+        _rag_context = ""
+        if _rag_chunks:
+            _rag_texts = [ch["text"] for ch in _rag_chunks[:50]]  # top 50 chunks
+            _rag_context = "\n\nDocumentation reference:\n" + "\n---\n".join(_rag_texts)
+
+        _full_system_prompt = chat_system_prompt + _rag_context
+
+        _chat_state_block = """# --- Chat ---
+_show_chat = c.signal(False, name="show_chat")"""
 
         _chat_nav_item = ""
 
         _chat_panel_block = f"""
         # --- Chat (Floating Bubble + Modal) ---
         with c.modal(title="Ask about {title}", signal=_show_chat, size="lg"):
-            c.input("API Key", signal=_chat_api_key, type="password",
-                    placeholder="sk-... (optional for Ollama)",
-                    on_change="update_chat_api_key")
-            with c.row(gap=3):
-                c.select("Model", options={chat_models!r},
-                         signal=_chat_model, on_change="update_chat_model")
-            c.spacer(2)
             c.chat(
-                signal=_chat_messages,
-                on_send="chat_send",
-                on_clear="chat_clear",
-                height="400px",
+                provider={_provider!r},
+                model={_model!r},
+                system_prompt={_full_system_prompt!r},
+                height="450px",
                 show_clear=True,
-                persist=True,
                 placeholder="Ask about functions, classes, usage...",
             )
         c.html(\'\'\'<style>
@@ -1126,384 +1107,7 @@ c.bind("update_chat_system_prompt", _chat_system_prompt)"""
     <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
 </button>\'\'\')"""
 
-        # Generate the static JavaScript for RAG + LLM chat
-        _chat_static_script = (
-            """
-// --- CacaoDocs AI Chat (RAG + LLM) ---
-(function() {
-  const EMBEDDING_MODEL = """
-            + json.dumps(embedding_model)
-            + """;
-  const TOP_K = """
-            + str(top_k)
-            + """;
-  const SYSTEM_PROMPT = """
-            + json.dumps(chat_system_prompt)
-            + """;
-
-  let _embeddings = null;
-  let _embeddingsLoading = false;
-  let _ollamaAvailable = null; // null = unknown, true/false after check
-
-  // Check if Ollama is running locally
-  async function checkOllama() {
-    if (_ollamaAvailable !== null) return _ollamaAvailable;
-    try {
-      const resp = await fetch('http://localhost:11434/api/tags', {signal: AbortSignal.timeout(2000)});
-      _ollamaAvailable = resp.ok;
-    } catch {
-      _ollamaAvailable = false;
-    }
-    return _ollamaAvailable;
-  }
-
-  // Load embeddings on demand
-  async function loadEmbeddings() {
-    if (_embeddings) return _embeddings;
-    if (_embeddingsLoading) {
-      while (_embeddingsLoading) await new Promise(r => setTimeout(r, 50));
-      return _embeddings;
-    }
-    _embeddingsLoading = true;
-    try {
-      const base = window.__CACAO_BASE_PATH__ || '.';
-      const resp = await fetch(base + '/embeddings.json');
-      if (resp.ok) {
-        _embeddings = await resp.json();
-      }
-    } catch (e) {
-      console.warn('[CacaoDocs] Could not load embeddings:', e);
-    }
-    _embeddingsLoading = false;
-    return _embeddings;
-  }
-
-  // --- Keyword search (always works, no API needed) ---
-  function keywordSearch(query, chunks, topK) {
-    const words = query.toLowerCase().split(/\\s+/).filter(w => w.length > 2);
-    if (!words.length || !chunks.length) return [];
-
-    const scored = chunks.map(chunk => {
-      const text = chunk.text.toLowerCase();
-      let score = 0;
-      for (const w of words) {
-        // Count occurrences, weight exact word matches higher
-        const regex = new RegExp('\\\\b' + w.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\\\$&'), 'gi');
-        const matches = (text.match(regex) || []).length;
-        score += matches * 2;
-        // Partial matches
-        if (text.includes(w)) score += 1;
-      }
-      // Boost if source/type matches a query word
-      const src = (chunk.source || '').toLowerCase();
-      for (const w of words) {
-        if (src.includes(w)) score += 3;
-      }
-      return {score, text: chunk.text, source: chunk.source, type: chunk.type};
-    });
-
-    return scored.filter(s => s.score > 0).sort((a, b) => b.score - a.score).slice(0, topK);
-  }
-
-  // --- Vector search (needs embedding API) ---
-  function cosineSim(a, b) {
-    let dot = 0, na = 0, nb = 0;
-    for (let i = 0; i < a.length; i++) {
-      dot += a[i] * b[i];
-      na += a[i] * a[i];
-      nb += b[i] * b[i];
-    }
-    na = Math.sqrt(na);
-    nb = Math.sqrt(nb);
-    return (na && nb) ? dot / (na * nb) : 0;
-  }
-
-  async function embedQuery(text, apiKey) {
-    const parts = EMBEDDING_MODEL.split('/');
-    const provider = parts[0];
-    const model = parts.slice(1).join('/');
-
-    if (provider === 'ollama') {
-      if (!await checkOllama()) return null;
-      const resp = await fetch('http://localhost:11434/api/embed', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({model: model, input: [text]}),
-      });
-      const data = await resp.json();
-      return data.embeddings?.[0] || null;
-    } else if (provider === 'openai') {
-      if (!apiKey) return null;
-      const resp = await fetch('https://api.openai.com/v1/embeddings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + apiKey,
-        },
-        body: JSON.stringify({model: model, input: [text]}),
-      });
-      const data = await resp.json();
-      return data.data?.[0]?.embedding || null;
-    }
-    return null;
-  }
-
-  // RAG search: try vector search, fall back to keyword search
-  async function ragSearch(query, apiKey) {
-    const emb = await loadEmbeddings();
-    const chunks = emb?.chunks || [];
-    if (!chunks.length) return [];
-
-    // Try vector search first (if embeddings have vectors and API is reachable)
-    if (chunks[0]?.embedding) {
-      try {
-        const queryVec = await embedQuery(query, apiKey);
-        if (queryVec) {
-          const scored = chunks.map(c => ({
-            score: cosineSim(queryVec, c.embedding),
-            text: c.text, source: c.source, type: c.type,
-          }));
-          scored.sort((a, b) => b.score - a.score);
-          return scored.slice(0, TOP_K);
-        }
-      } catch (e) {
-        console.warn('[CacaoDocs] Vector search failed, using keyword search:', e);
-      }
-    }
-
-    // Fallback: keyword search (always works)
-    return keywordSearch(query, chunks, TOP_K);
-  }
-
-  // Determine API endpoint and headers for a model
-  function getProviderConfig(modelStr, apiKey) {
-    const parts = modelStr.split('/');
-    const provider = parts[0];
-    const model = parts.slice(1).join('/');
-
-    if (provider === 'ollama') {
-      return {
-        url: 'http://localhost:11434/api/chat',
-        headers: {'Content-Type': 'application/json'},
-        body: (msgs) => JSON.stringify({model: model, messages: msgs, stream: true}),
-        parseStream: 'ollama',
-      };
-    } else if (provider === 'openai') {
-      return {
-        url: 'https://api.openai.com/v1/chat/completions',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + (apiKey || ''),
-        },
-        body: (msgs) => JSON.stringify({model: model, messages: msgs, stream: true}),
-        parseStream: 'openai',
-      };
-    } else if (provider === 'claude') {
-      return {
-        url: 'https://api.anthropic.com/v1/messages',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey || '',
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true',
-        },
-        body: (msgs) => {
-          const sysMsg = msgs.find(m => m.role === 'system');
-          const chatMsgs = msgs.filter(m => m.role !== 'system');
-          const payload = {model: model, messages: chatMsgs, max_tokens: 4096, stream: true};
-          if (sysMsg) payload.system = sysMsg.content;
-          return JSON.stringify(payload);
-        },
-        parseStream: 'claude',
-      };
-    } else if (provider === 'groq') {
-      return {
-        url: 'https://api.groq.com/openai/v1/chat/completions',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + (apiKey || ''),
-        },
-        body: (msgs) => JSON.stringify({model: model, messages: msgs, stream: true}),
-        parseStream: 'openai',
-      };
-    }
-    // Fallback: assume OpenAI-compatible
-    return {
-      url: 'https://api.openai.com/v1/chat/completions',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + (apiKey || ''),
-      },
-      body: (msgs) => JSON.stringify({model: model, messages: msgs, stream: true}),
-      parseStream: 'openai',
-    };
-  }
-
-  // Stream LLM response
-  async function streamChat(messages, modelStr, apiKey, signalName) {
-    const ws = window.Cacao?.ws;
-    const config = getProviderConfig(modelStr, apiKey);
-
-    const resp = await fetch(config.url, {
-      method: 'POST',
-      headers: config.headers,
-      body: config.body(messages),
-    });
-
-    if (!resp.ok) {
-      const err = await resp.text();
-      throw new Error(err || resp.statusText);
-    }
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let fullText = '';
-    let buffer = '';
-
-    while (true) {
-      const {done, value} = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, {stream: true});
-      const lines = buffer.split('\\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed === 'data: [DONE]') continue;
-
-        let delta = '';
-        if (config.parseStream === 'ollama') {
-          try {
-            const obj = JSON.parse(trimmed);
-            delta = obj.message?.content || '';
-          } catch {}
-        } else if (config.parseStream === 'openai') {
-          if (trimmed.startsWith('data: ')) {
-            try {
-              const obj = JSON.parse(trimmed.slice(6));
-              delta = obj.choices?.[0]?.delta?.content || '';
-            } catch {}
-          }
-        } else if (config.parseStream === 'claude') {
-          if (trimmed.startsWith('data: ')) {
-            try {
-              const obj = JSON.parse(trimmed.slice(6));
-              if (obj.type === 'content_block_delta') {
-                delta = obj.delta?.text || '';
-              }
-            } catch {}
-          }
-        }
-
-        if (delta) {
-          fullText += delta;
-          if (ws) ws.dispatchChat({type: 'chat_delta', signal: signalName, delta: delta});
-        }
-      }
-    }
-
-    if (ws) ws.dispatchChat({type: 'chat_done', signal: signalName});
-    return fullText;
-  }
-
-  // Expose for handlers
-  window.__cacaoDocs = {
-    ragSearch,
-    streamChat,
-    loadEmbeddings,
-    checkOllama,
-    SYSTEM_PROMPT,
-  };
-})();
-"""
-        )
-
-        _chat_send_handler = """async function(signals, event) {
-    const text = (event.text || '').trim();
-    if (!text) return;
-
-    const signalName = 'chat_messages';
-    const msgs = signals.get(signalName) || [];
-    signals.set(signalName, [...msgs, {role: 'user', content: text}]);
-
-    const apiKey = signals.get('chat_api_key') || '';
-    const model = signals.get('chat_model') || 'openai/gpt-4o-mini';
-    const systemPrompt = signals.get('chat_system_prompt') || window.__cacaoDocs.SYSTEM_PROMPT;
-
-    // Check if LLM is reachable
-    const isOllamaModel = model.startsWith('ollama/');
-    if (isOllamaModel) {
-      const ollamaOk = await window.__cacaoDocs.checkOllama();
-      if (!ollamaOk) {
-        const updated = signals.get(signalName) || [];
-        signals.set(signalName, [...updated, {role: 'error', content:
-          'Ollama is not running locally. To use local AI:\\n\\n' +
-          '1. Install Ollama: https://ollama.com/download\\n' +
-          '2. Run: ollama pull ' + model.split('/')[1] + '\\n' +
-          '3. Start Ollama and refresh this page\\n\\n' +
-          'Or enter an API key and switch to a cloud model (OpenAI, Claude, Groq).'}]);
-        return;
-      }
-    } else if (!apiKey) {
-      const updated = signals.get(signalName) || [];
-      signals.set(signalName, [...updated, {role: 'error', content:
-        'Please enter an API key in Settings for ' + model + '.'}]);
-      return;
-    }
-
-    try {
-      // RAG: find relevant documentation
-      let contextStr = '';
-      try {
-        const results = await window.__cacaoDocs.ragSearch(text, apiKey);
-        if (results.length > 0) {
-          contextStr = '\\n\\nRelevant documentation:\\n' +
-            results.map(r => '[' + r.type + '] ' + r.source + ':\\n' + r.text).join('\\n---\\n');
-        }
-      } catch (e) {
-        console.warn('[CacaoDocs] RAG search failed, continuing without context:', e);
-      }
-
-      // Build messages for LLM
-      const llmMessages = [
-        {role: 'system', content: systemPrompt + contextStr},
-      ];
-      // Add recent chat history (last 10 messages)
-      const recent = (signals.get(signalName) || []).slice(-10);
-      for (const m of recent) {
-        if (m.role === 'user' || m.role === 'assistant') {
-          llmMessages.push({role: m.role, content: m.content});
-        }
-      }
-
-      const fullResponse = await window.__cacaoDocs.streamChat(
-        llmMessages, model, apiKey, signalName
-      );
-
-      const updated = signals.get(signalName) || [];
-      signals.set(signalName, [...updated, {role: 'assistant', content: fullResponse}]);
-
-    } catch (e) {
-      const updated = signals.get(signalName) || [];
-      signals.set(signalName, [...updated, {role: 'error', content: String(e)}]);
-      if (window.Cacao?.ws) {
-        window.Cacao.ws.dispatchChat({type: 'chat_done', signal: signalName});
-      }
-    }
-  }"""
-
-        _chat_clear_handler = """function(signals, event) {
-    signals.set('chat_messages', []);
-    try { localStorage.removeItem('cacao-chat-chat_messages'); } catch {}
-  }"""
-
-        # Register static handlers and scripts in app code
-        _chat_static_registration = f"""
-# --- Static Chat Handlers (for GitHub Pages / static export) ---
-c.static_script({_chat_static_script!r})
-c.static_handler("chat_send", {_chat_send_handler!r})
-c.static_handler("chat_clear", {_chat_clear_handler!r})"""
+        _chat_static_registration = ""
     else:
         _chat_state_block = ""
         _chat_nav_item = ""
@@ -1512,10 +1116,13 @@ c.static_handler("chat_clear", {_chat_clear_handler!r})"""
 
     code = f'''"""Auto-generated documentation app powered by CacaoDocs + Cacao."""
 import json
+import os as _os
 import cacao as c
 
 # --- Documentation Data ---
-_DATA = json.loads({data_json!r})
+_DATA_PATH = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "data.json")
+with open(_DATA_PATH, "r", encoding="utf-8") as _f:
+    _DATA = json.load(_f)
 
 _PAGES = _DATA["pages"]
 _CONFIG = _DATA["config"]
@@ -1561,6 +1168,26 @@ c.config(
     title={title!r},
     theme={theme!r},
 )
+
+# --- Plugin Registration ---
+_plugin = c.register_plugin(
+    "cacaodocs",
+    version={self_version!r},
+    description="Auto-generated documentation",
+)
+_plugin.on("on_ready", lambda: (
+    c.notify(
+        "Documentation loaded",
+        f"{{len(_FUNCTIONS)}} functions, {{len(_CLASSES)}} classes, {{len(_API_ENDPOINTS)}} endpoints",
+        variant="success",
+    ),
+    c.emit("docs:loaded", {{
+        "functions": len(_FUNCTIONS),
+        "classes": len(_CLASSES),
+        "endpoints": len(_API_ENDPOINTS),
+        "pages": len(_PAGES),
+    }}),
+))
 
 {_chat_state_block}
 
@@ -1744,6 +1371,7 @@ def _render_function_block(func):
 
     c.divider()
     c.spacer(2)
+    c.anchor(func.get("full_path", name))
 
     # For API endpoints, show method + path as header
     ds = func.get("docstring", {{}})
@@ -1847,7 +1475,7 @@ def _render_function_block(func):
         c.spacer(2)
         with c.tabs():
             with c.tab("src_" + name, "Source Code"):
-                c.code(func["source"], language="python")
+                c.code(func["source"], language="python", line_numbers=True)
 
     c.spacer(3)
 
@@ -2059,7 +1687,7 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
                         c.spacer(4)
 
                         for cls in _CLASSES:
-                            c.raw_html(f'<div id="type_{{cls["full_path"]}}"></div>')
+                            c.anchor(f'type_{{cls["full_path"]}}')
                             with c.card():
                                 _render_class_detail(cls)
                             c.spacer(3)
@@ -2114,7 +1742,7 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
                             method = ds.get("http_method", "")
                             path = ds.get("path", "")
 
-                            c.raw_html(f'<div id="ep_{{ep["full_path"]}}"></div>')
+                            c.anchor(f'ep_{{ep["full_path"]}}')
                             with c.card():
                                 # Header with method badge + path
                                 with c.row(gap=3, wrap=True):
@@ -2133,7 +1761,7 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
                                     c.spacer(3)
                                     with c.tabs():
                                         with c.tab("src_" + ep["name"], "Source Code"):
-                                            c.code(ep["source"], language="python")
+                                            c.code(ep["source"], language="python", line_numbers=True)
                             c.spacer(3)
 
         # --- Call Map Panel ---
@@ -2236,12 +1864,58 @@ with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme
             c.spacer(2)
             _all_todos = _DATA.get("todos", [])
             _all_dead = _DATA.get("dead_code", [])
-            _all_deprecated = [f for f in _FUNCTIONS + _API_ENDPOINTS if f.get("is_deprecated")]
+            _all_deprecated_items = _FUNCTIONS + _API_ENDPOINTS
+            for _dcls in _CLASSES:
+                for _dm in _dcls.get("methods", []):
+                    _all_deprecated_items.append({{**_dm, "full_path": f'{{_dcls["full_path"]}}.{{_dm["name"]}}'}})
+            _all_deprecated = [f for f in _all_deprecated_items if f.get("is_deprecated")]
             with c.row(wrap=True, gap=4):
                 c.metric("TODOs", len([t for t in _all_todos if t.get("tag") == "TODO"]))
                 c.metric("FIXMEs", len([t for t in _all_todos if t.get("tag") == "FIXME"]))
                 c.metric("Deprecated", len(_all_deprecated))
                 c.metric("Dead Code", len(_all_dead))
+
+            # Deprecated functions detail
+            if _all_deprecated:
+                c.spacer(4)
+                c.title("Deprecated Functions", level=3)
+                c.spacer(2)
+                _dep_table = []
+                for f in _all_deprecated:
+                    _dep_table.append({{
+                        "Name": f.get("full_path", f["name"]),
+                        "Since": f.get("deprecation_since", ""),
+                        "Message": f.get("deprecation_message", ""),
+                        "Type": f.get("doc_type", "function"),
+                    }})
+                c.table(_dep_table, paginate=False)
+
+            # Recent changes summary
+            _changes_summary = _DATA.get("changes", [])
+            if _changes_summary:
+                c.spacer(4)
+                c.title("Recent Changes", level=3)
+                c.spacer(2)
+                _ch_summary = {{}}
+                for ch in _changes_summary:
+                    _ch_summary[ch["change"]] = _ch_summary.get(ch["change"], 0) + 1
+                with c.row(wrap=True, gap=4):
+                    for chtype, cnt in sorted(_ch_summary.items()):
+                        c.metric(chtype.replace("+", " + ").title(), cnt)
+                c.spacer(2)
+                _ch_summary_table = []
+                for ch in _changes_summary[:15]:
+                    _ch_summary_table.append({{
+                        "Name": ch["name"],
+                        "Type": ch["doc_type"],
+                        "Change": ch["change"],
+                    }})
+                c.table(_ch_summary_table, paginate=False)
+
+            _breaking_summary = _DATA.get("breaking_changes", [])
+            if _breaking_summary:
+                c.spacer(2)
+                c.alert(f"{{len(_breaking_summary)}} breaking change(s) detected. See Changelog for details.", type="danger")
 
             # Complexity hotspots
             c.spacer(4)
@@ -2526,8 +2200,16 @@ def build_docs(
     with open(app_path, "w", encoding="utf-8") as f:
         f.write(app_code)
 
+    # Strip non-serializable objects from config before writing
+    safe_config = {
+        k: v
+        for k, v in json_data.get("config", {}).items()
+        if k not in ("custom_doc_types",)
+    }
+    safe_data = {**json_data, "config": safe_config}
+
     data_path = output_dir / "data.json"
     with open(data_path, "w", encoding="utf-8") as f:
-        json.dump(json_data, f, indent=2, ensure_ascii=False, default=str)
+        json.dump(safe_data, f, indent=2, ensure_ascii=False, default=str)
 
     return json_data

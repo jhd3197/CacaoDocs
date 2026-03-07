@@ -69,14 +69,27 @@ def _extract_route_path(node: ast.expr) -> str:
     return ""
 
 
+def _normalize_ast(node: ast.AST) -> str:
+    """Produce a normalized AST string that ignores cosmetic differences.
+
+    Local variable names, string formatting, and whitespace do not affect
+    the output — only the *structure* of the code matters.  This makes
+    hashes stable across renames-of-locals and style-only refactors.
+    """
+    if hasattr(ast, "unparse"):
+        # ast.unparse (3.9+) gives a canonical text form.
+        return ast.unparse(node)
+    return ast.dump(node)
+
+
 def _hash_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     """Hash the function signature: name, args, defaults, return annotation, decorators."""
     parts = [node.name]
-    parts.append(ast.dump(node.args))
+    parts.append(_normalize_ast(node.args))
     if node.returns:
-        parts.append(ast.dump(node.returns))
+        parts.append(_normalize_ast(node.returns))
     for d in node.decorator_list:
-        parts.append(ast.dump(d))
+        parts.append(_normalize_ast(d))
     return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
 
 
@@ -91,18 +104,65 @@ def _hash_body(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
         and isinstance(body[0].value.value, str)
     ):
         body = body[1:]
-    parts = [ast.dump(stmt) for stmt in body]
+    parts = [_normalize_ast(stmt) for stmt in body]
     return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
+
+
+def _hash_body_per_statement(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    """Hash each statement in the body individually.
+
+    Returns a list of 16-char SHA-256 hashes, one per statement (docstring
+    excluded).  This enables pinpointing *which lines* changed rather than
+    just detecting that the body changed at all.
+    """
+    body = list(node.body)
+    if (
+        body
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+    ):
+        body = body[1:]
+    return [
+        hashlib.sha256(_normalize_ast(stmt).encode()).hexdigest()[:16]
+        for stmt in body
+    ]
 
 
 def _hash_class_signature(node: ast.ClassDef) -> str:
     """Hash the class signature: name, bases, decorators."""
     parts = [node.name]
     for base in node.bases:
-        parts.append(ast.dump(base))
+        parts.append(_normalize_ast(base))
     for d in node.decorator_list:
-        parts.append(ast.dump(d))
+        parts.append(_normalize_ast(d))
     return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
+
+
+def _call_graph_hash(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+    """Hash the set of functions this function calls.
+
+    If a dependency's signature changes, the caller's call-graph hash
+    changes too — useful for detecting transitive performance regressions.
+    """
+    calls: list[str] = []
+    for child in ast.walk(node):
+        if isinstance(child, ast.Call):
+            name = _call_name(child.func)
+            if name and name not in calls:
+                calls.append(name)
+    calls.sort()
+    return hashlib.sha256("|".join(calls).encode()).hexdigest()[:16]
+
+
+def _call_name(node: ast.expr) -> str:
+    """Extract the dotted name from a Call node's func attribute."""
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        parent = _call_name(node.value)
+        return f"{parent}.{node.attr}" if parent else node.attr
+    return ""
 
 
 def _cyclomatic_complexity(node: ast.AST) -> int:
@@ -116,10 +176,7 @@ def _cyclomatic_complexity(node: ast.AST) -> int:
             complexity += 1
         elif isinstance(child, ast.ExceptHandler):
             complexity += 1
-        elif isinstance(
-            child,
-            ast.With,
-        ):
+        elif isinstance(child, ast.With):
             complexity += 1
         elif isinstance(child, ast.Assert):
             complexity += 1
@@ -133,6 +190,45 @@ def _cyclomatic_complexity(node: ast.AST) -> int:
         ):
             complexity += sum(1 for _ in child.generators)
     return complexity
+
+
+def _cognitive_weight(node: ast.AST) -> int:
+    """Calculate cognitive complexity — how hard the code is to *understand*.
+
+    Unlike cyclomatic complexity (which counts branches), cognitive complexity
+    penalizes nesting depth.  A deeply nested ``if`` inside a ``for`` inside
+    a ``try`` scores higher than the same constructs at the top level.
+
+    This correlates better with performance risk: deeply nested code tends
+    to have hidden O(n^2+) behaviour.
+    """
+    weight = 0
+
+    def _walk(child: ast.AST, depth: int) -> None:
+        nonlocal weight
+        increment = False
+
+        if isinstance(child, (ast.If, ast.IfExp)):
+            increment = True
+        elif isinstance(child, (ast.For, ast.AsyncFor, ast.While)):
+            increment = True
+        elif isinstance(child, ast.ExceptHandler):
+            increment = True
+        elif isinstance(child, ast.BoolOp):
+            weight += len(child.values) - 1
+
+        if increment:
+            # +1 for the construct, +depth for nesting
+            weight += 1 + depth
+
+        next_depth = depth + 1 if increment else depth
+        for grandchild in ast.iter_child_nodes(child):
+            _walk(grandchild, next_depth)
+
+    for child in ast.iter_child_nodes(node):
+        _walk(child, 0)
+
+    return weight
 
 
 # Pattern for TODO/FIXME/HACK/XXX in comments
@@ -845,7 +941,10 @@ class Scanner:
             doc_type=parsed.doc_type,
             signature_hash=_hash_signature(node),
             body_hash=_hash_body(node),
+            body_statement_hashes=_hash_body_per_statement(node),
+            call_graph_hash=_call_graph_hash(node),
             complexity=_cyclomatic_complexity(node),
+            cognitive_weight=_cognitive_weight(node),
             is_deprecated=is_deprecated,
             deprecation_message=dep_msg,
             deprecation_since=dep_since,
