@@ -19,6 +19,7 @@ try:
         compute_complexity as _tukuy_compute_complexity,
         _call_name as _tukuy_call_name,
     )
+
     _HAS_TUKUY = True
 except ImportError:
     _HAS_TUKUY = False
@@ -93,7 +94,9 @@ if _HAS_TUKUY:
     def _hash_body(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
         return _tukuy_hash_body(node, length=16)
 
-    def _hash_body_per_statement(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    def _hash_body_per_statement(
+        node: ast.FunctionDef | ast.AsyncFunctionDef,
+    ) -> list[str]:
         return _tukuy_hash_body_per_statement(node, length=16)
 
     def _hash_class_signature(node: ast.ClassDef) -> str:
@@ -133,7 +136,9 @@ else:
         parts = [_normalize_ast(stmt) for stmt in body]
         return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
 
-    def _hash_body_per_statement(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+    def _hash_body_per_statement(
+        node: ast.FunctionDef | ast.AsyncFunctionDef,
+    ) -> list[str]:
         body = list(node.body)
         if (
             body
@@ -143,7 +148,8 @@ else:
         ):
             body = body[1:]
         return [
-            hashlib.sha256(_normalize_ast(stmt).encode()).hexdigest()[:16] for stmt in body
+            hashlib.sha256(_normalize_ast(stmt).encode()).hexdigest()[:16]
+            for stmt in body
         ]
 
     def _hash_class_signature(node: ast.ClassDef) -> str:
