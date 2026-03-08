@@ -8,6 +8,21 @@ import re
 from pathlib import Path
 from typing import Any, Generator
 
+try:
+    from tukuy.plugins.ast_fingerprint import (
+        normalize_ast as _tukuy_normalize_ast,
+        hash_signature as _tukuy_hash_signature,
+        hash_body as _tukuy_hash_body,
+        hash_body_per_statement as _tukuy_hash_body_per_statement,
+        hash_class_signature as _tukuy_hash_class_signature,
+        hash_call_graph as _tukuy_hash_call_graph,
+        compute_complexity as _tukuy_compute_complexity,
+        _call_name as _tukuy_call_name,
+    )
+    _HAS_TUKUY = True
+except ImportError:
+    _HAS_TUKUY = False
+
 from .parser import DocstringParser
 from .types import (
     ClassDoc,
@@ -69,126 +84,114 @@ def _extract_route_path(node: ast.expr) -> str:
     return ""
 
 
-def _normalize_ast(node: ast.AST) -> str:
-    """Produce a normalized AST string that ignores cosmetic differences.
+if _HAS_TUKUY:
+    _normalize_ast = _tukuy_normalize_ast
 
-    Local variable names, string formatting, and whitespace do not affect
-    the output — only the *structure* of the code matters.  This makes
-    hashes stable across renames-of-locals and style-only refactors.
-    """
-    if hasattr(ast, "unparse"):
-        # ast.unparse (3.9+) gives a canonical text form.
-        return ast.unparse(node)
-    return ast.dump(node)
+    def _hash_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+        return _tukuy_hash_signature(node, length=16)
 
+    def _hash_body(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+        return _tukuy_hash_body(node, length=16)
 
-def _hash_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
-    """Hash the function signature: name, args, defaults, return annotation, decorators."""
-    parts = [node.name]
-    parts.append(_normalize_ast(node.args))
-    if node.returns:
-        parts.append(_normalize_ast(node.returns))
-    for d in node.decorator_list:
-        parts.append(_normalize_ast(d))
-    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
+    def _hash_body_per_statement(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+        return _tukuy_hash_body_per_statement(node, length=16)
 
+    def _hash_class_signature(node: ast.ClassDef) -> str:
+        return _tukuy_hash_class_signature(node, length=16)
 
-def _hash_body(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
-    """Hash the function body (excluding the docstring)."""
-    body = list(node.body)
-    # Skip the docstring node (first Expr with a Constant string)
-    if (
-        body
-        and isinstance(body[0], ast.Expr)
-        and isinstance(body[0].value, ast.Constant)
-        and isinstance(body[0].value.value, str)
-    ):
-        body = body[1:]
-    parts = [_normalize_ast(stmt) for stmt in body]
-    return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
+    def _call_graph_hash(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+        return _tukuy_hash_call_graph(node, length=16)
 
+    _call_name = _tukuy_call_name
+    _cyclomatic_complexity = _tukuy_compute_complexity
 
-def _hash_body_per_statement(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
-    """Hash each statement in the body individually.
+else:
+    # Inline fallback — CacaoDocs works without tukuy installed
+    def _normalize_ast(node: ast.AST) -> str:
+        if hasattr(ast, "unparse"):
+            return ast.unparse(node)
+        return ast.dump(node)
 
-    Returns a list of 16-char SHA-256 hashes, one per statement (docstring
-    excluded).  This enables pinpointing *which lines* changed rather than
-    just detecting that the body changed at all.
-    """
-    body = list(node.body)
-    if (
-        body
-        and isinstance(body[0], ast.Expr)
-        and isinstance(body[0].value, ast.Constant)
-        and isinstance(body[0].value.value, str)
-    ):
-        body = body[1:]
-    return [
-        hashlib.sha256(_normalize_ast(stmt).encode()).hexdigest()[:16] for stmt in body
-    ]
+    def _hash_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+        parts = [node.name]
+        parts.append(_normalize_ast(node.args))
+        if node.returns:
+            parts.append(_normalize_ast(node.returns))
+        for d in node.decorator_list:
+            parts.append(_normalize_ast(d))
+        return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
 
-
-def _hash_class_signature(node: ast.ClassDef) -> str:
-    """Hash the class signature: name, bases, decorators."""
-    parts = [node.name]
-    for base in node.bases:
-        parts.append(_normalize_ast(base))
-    for d in node.decorator_list:
-        parts.append(_normalize_ast(d))
-    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
-
-
-def _call_graph_hash(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
-    """Hash the set of functions this function calls.
-
-    If a dependency's signature changes, the caller's call-graph hash
-    changes too — useful for detecting transitive performance regressions.
-    """
-    calls: list[str] = []
-    for child in ast.walk(node):
-        if isinstance(child, ast.Call):
-            name = _call_name(child.func)
-            if name and name not in calls:
-                calls.append(name)
-    calls.sort()
-    return hashlib.sha256("|".join(calls).encode()).hexdigest()[:16]
-
-
-def _call_name(node: ast.expr) -> str:
-    """Extract the dotted name from a Call node's func attribute."""
-    if isinstance(node, ast.Name):
-        return node.id
-    if isinstance(node, ast.Attribute):
-        parent = _call_name(node.value)
-        return f"{parent}.{node.attr}" if parent else node.attr
-    return ""
-
-
-def _cyclomatic_complexity(node: ast.AST) -> int:
-    """Calculate cyclomatic complexity of an AST node.
-
-    Starts at 1 and increments for each branch point.
-    """
-    complexity = 1
-    for child in ast.walk(node):
-        if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor)):
-            complexity += 1
-        elif isinstance(child, ast.ExceptHandler):
-            complexity += 1
-        elif isinstance(child, ast.With):
-            complexity += 1
-        elif isinstance(child, ast.Assert):
-            complexity += 1
-        elif isinstance(child, ast.BoolOp):
-            # each `and`/`or` adds a branch
-            complexity += len(child.values) - 1
-        elif isinstance(child, ast.IfExp):
-            complexity += 1
-        elif isinstance(
-            child, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)
+    def _hash_body(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+        body = list(node.body)
+        if (
+            body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
         ):
-            complexity += sum(1 for _ in child.generators)
-    return complexity
+            body = body[1:]
+        parts = [_normalize_ast(stmt) for stmt in body]
+        return hashlib.sha256("\n".join(parts).encode()).hexdigest()[:16]
+
+    def _hash_body_per_statement(node: ast.FunctionDef | ast.AsyncFunctionDef) -> list[str]:
+        body = list(node.body)
+        if (
+            body
+            and isinstance(body[0], ast.Expr)
+            and isinstance(body[0].value, ast.Constant)
+            and isinstance(body[0].value.value, str)
+        ):
+            body = body[1:]
+        return [
+            hashlib.sha256(_normalize_ast(stmt).encode()).hexdigest()[:16] for stmt in body
+        ]
+
+    def _hash_class_signature(node: ast.ClassDef) -> str:
+        parts = [node.name]
+        for base in node.bases:
+            parts.append(_normalize_ast(base))
+        for d in node.decorator_list:
+            parts.append(_normalize_ast(d))
+        return hashlib.sha256("|".join(parts).encode()).hexdigest()[:16]
+
+    def _call_graph_hash(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
+        calls: list[str] = []
+        for child in ast.walk(node):
+            if isinstance(child, ast.Call):
+                name = _call_name(child.func)
+                if name and name not in calls:
+                    calls.append(name)
+        calls.sort()
+        return hashlib.sha256("|".join(calls).encode()).hexdigest()[:16]
+
+    def _call_name(node: ast.expr) -> str:
+        if isinstance(node, ast.Name):
+            return node.id
+        if isinstance(node, ast.Attribute):
+            parent = _call_name(node.value)
+            return f"{parent}.{node.attr}" if parent else node.attr
+        return ""
+
+    def _cyclomatic_complexity(node: ast.AST) -> int:
+        complexity = 1
+        for child in ast.walk(node):
+            if isinstance(child, (ast.If, ast.While, ast.For, ast.AsyncFor)):
+                complexity += 1
+            elif isinstance(child, ast.ExceptHandler):
+                complexity += 1
+            elif isinstance(child, ast.With):
+                complexity += 1
+            elif isinstance(child, ast.Assert):
+                complexity += 1
+            elif isinstance(child, ast.BoolOp):
+                complexity += len(child.values) - 1
+            elif isinstance(child, ast.IfExp):
+                complexity += 1
+            elif isinstance(
+                child, (ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)
+            ):
+                complexity += sum(1 for _ in child.generators)
+        return complexity
 
 
 def _cognitive_weight(node: ast.AST) -> int:
