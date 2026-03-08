@@ -49,7 +49,7 @@ For shared keys like `title` and `theme`:
 - **Never import `yaml` directly** — Always go through `cacao.config` or `c.get_yaml_config()`
 - **Never duplicate Cacao's config discovery** — Don't search for `cacao.yaml` manually; Cacao handles file discovery
 - **When adding new CacaoDocs config keys**, just add them to `cacao.yaml` — no need to create a separate config file
-- **Minimum Cacao version is 2.0.16** — Provides LLM chat with streaming, plugin slot injection, extensions, and `get_yaml_config()`
+- **Minimum Cacao version is 2.0.18** — Provides LLM chat with streaming, plugin slot injection, extensions, and `get_yaml_config()`
 
 ## Common Commands
 
