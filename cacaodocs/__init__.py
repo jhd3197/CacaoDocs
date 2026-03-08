@@ -1,30 +1,5 @@
 """CacaoDocs - Generate documentation from Python docstrings, powered by Cacao."""
 
-from .scanner import Scanner, scan_directory
-from .parser import DocstringParser
-from .config import load_config, create_default_config
-from .builder import build_docs
-from .plugin import plug
-from .types import (
-    DocType,
-    ModuleDoc,
-    ClassDoc,
-    FunctionDoc,
-    MethodDoc,
-    PageDoc,
-    ParsedDocstring,
-    ArgDoc,
-    ReturnDoc,
-    RaiseDoc,
-    ResponseDoc,
-    HeaderDoc,
-    PayloadFieldDoc,
-    ConfigFieldDoc,
-    CustomDocTypeDef,
-    CustomSectionDef,
-    DocumentationData,
-)
-
 __version__ = "0.4.0"
 
 
@@ -89,6 +64,47 @@ def doc(**kwargs):
         return fn
 
     return _identity
+
+
+def __getattr__(name):
+    """Lazy-import heavy modules so `from cacaodocs import doc` stays lightweight."""
+    _heavy_imports = {
+        "Scanner": (".scanner", "Scanner"),
+        "scan_directory": (".scanner", "scan_directory"),
+        "DocstringParser": (".parser", "DocstringParser"),
+        "load_config": (".config", "load_config"),
+        "create_default_config": (".config", "create_default_config"),
+        "build_docs": (".builder", "build_docs"),
+        "plug": (".plugin", "plug"),
+    }
+    _type_imports = {
+        "DocType": (".types", "DocType"),
+        "ModuleDoc": (".types", "ModuleDoc"),
+        "ClassDoc": (".types", "ClassDoc"),
+        "FunctionDoc": (".types", "FunctionDoc"),
+        "MethodDoc": (".types", "MethodDoc"),
+        "PageDoc": (".types", "PageDoc"),
+        "ParsedDocstring": (".types", "ParsedDocstring"),
+        "ArgDoc": (".types", "ArgDoc"),
+        "ReturnDoc": (".types", "ReturnDoc"),
+        "RaiseDoc": (".types", "RaiseDoc"),
+        "ResponseDoc": (".types", "ResponseDoc"),
+        "HeaderDoc": (".types", "HeaderDoc"),
+        "PayloadFieldDoc": (".types", "PayloadFieldDoc"),
+        "ConfigFieldDoc": (".types", "ConfigFieldDoc"),
+        "CustomDocTypeDef": (".types", "CustomDocTypeDef"),
+        "CustomSectionDef": (".types", "CustomSectionDef"),
+        "DocumentationData": (".types", "DocumentationData"),
+    }
+
+    lookup = {**_heavy_imports, **_type_imports}
+    if name in lookup:
+        module_path, attr = lookup[name]
+        import importlib
+
+        module = importlib.import_module(module_path, __package__)
+        return getattr(module, attr)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 __all__ = [
