@@ -1020,11 +1020,24 @@ def _generate_app_code(json_data: dict[str, Any]) -> str:
     title = config.get("title", "Documentation")
     description = config.get("description", "")
     raw_theme = config.get("theme", "dark")
-    # Theme can be a dict of colors (from cacao.yaml) — normalize to "dark"/"light"
+    # Theme can be a dict with dark/light sub-keys for custom colors,
+    # or a simple string ("dark"/"light"/"ocean"/etc.)
+    custom_theme_dark = None
+    custom_theme_light = None
     if isinstance(raw_theme, dict):
-        # Guess from bg_color: light backgrounds → "light", else "dark"
-        bg = raw_theme.get("bg_color", "#000")
-        theme = "light" if _is_light_color(bg) else "dark"
+        # New format: theme.dark / theme.light with CSS variable overrides
+        if "dark" in raw_theme and isinstance(raw_theme["dark"], dict):
+            custom_theme_dark = raw_theme["dark"]
+        if "light" in raw_theme and isinstance(raw_theme["light"], dict):
+            custom_theme_light = raw_theme["light"]
+        # Default theme preference (which mode to start with)
+        _default_mode = raw_theme.get("default", "dark")
+        # Legacy format: flat dict with bg_color
+        if not custom_theme_dark and not custom_theme_light:
+            bg = raw_theme.get("bg_color", "#000")
+            theme = "light" if _is_light_color(bg) else "dark"
+        else:
+            theme = _default_mode
     else:
         theme = raw_theme
     version = config.get("version", "")
@@ -1114,6 +1127,32 @@ _show_chat = c.signal(False, name="show_chat")"""
         _chat_panel_block = ""
         _chat_static_registration = ""
 
+    # Build custom theme registration block
+    _theme_registration_block = ""
+    _theme_dark_name = "dark"
+    _theme_light_name = "light"
+    if custom_theme_dark:
+        _theme_dark_name = f"{title.lower().replace(' ', '-')}-dark"
+        _vars_repr = repr(custom_theme_dark)
+        _theme_registration_block += (
+            f"\nc.register_theme({_theme_dark_name!r}, {_vars_repr})"
+        )
+    if custom_theme_light:
+        _theme_light_name = f"{title.lower().replace(' ', '-')}-light"
+        _vars_repr = repr(custom_theme_light)
+        _theme_registration_block += (
+            f"\nc.register_theme({_theme_light_name!r}, {_vars_repr})"
+        )
+
+    # If custom dark theme, use it as default
+    # Pick the correct custom theme name based on default mode
+    if theme == "light" and custom_theme_light:
+        _effective_theme = _theme_light_name
+    elif custom_theme_dark:
+        _effective_theme = _theme_dark_name
+    else:
+        _effective_theme = theme
+
     code = f'''"""Auto-generated documentation app powered by CacaoDocs + Cacao."""
 import json
 import os as _os
@@ -1166,8 +1205,9 @@ for mod in _CONTENT_MODULES:
 # --- App Config ---
 c.config(
     title={title!r},
-    theme={theme!r},
+    theme={_effective_theme!r},
 )
+{_theme_registration_block}
 
 # --- Plugin Registration ---
 _plugin = c.register_plugin(
@@ -1526,7 +1566,7 @@ def _render_class_detail(cls):
 
 _default_key = "home"
 
-with c.app_shell(brand={title!r}, default=_default_key, theme_dark="dark", theme_light="light"):
+with c.app_shell(brand={title!r}, default=_default_key, theme_dark={_theme_dark_name!r}, theme_light={_theme_light_name!r}):
     with c.nav_sidebar():
         c.nav_item("Home", key="home", icon="home")
 
