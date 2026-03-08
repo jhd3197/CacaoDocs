@@ -9,7 +9,7 @@ long_description = (HERE / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="cacaodocs",
-    version='0.1.25',
+    version='0.1.26',
     author="Juan Denis",
     author_email="juan@vene.co",
     description="Generate documentation from Python docstrings, powered by Cacao.",
