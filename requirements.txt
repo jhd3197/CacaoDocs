@@ -1,4 +1,4 @@
 click>=8.0.0
 PyYAML>=6.0
 Markdown>=3.4
-cacao>=2.0.8
+cacao>=2.0.18
